@@ -21,7 +21,7 @@ export default async function AdminLoginPage() {
           Sign in.
         </h1>
         <p className="mt-3 text-[14px] text-ink/60">
-          Enter the admin password set in <code className="rounded bg-ink/[0.06] px-1.5 py-0.5 text-[12px] text-ink">ADMIN_SECRET</code>.
+          Enter the admin password to continue.
         </p>
         <LoginForm />
       </div>

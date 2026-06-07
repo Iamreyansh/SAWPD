@@ -153,7 +153,15 @@ The `kabir` store has no products — visiting `/s/kabir` shows the empty-state
 
 ## 7. Next set — pick this up
 
-The Sets 8–20 plan is the active queue (see `PLAN.md`). Next: **Set 18 — SEO & share assets, abandoned-cart nudges, dashboard charts (Sets 18–20)**.
+The Sets 8–20 plan is the active queue (see `PLAN.md`). The rebrand landed as Set 18 (in-place; the planned SEO/share-assets scope deferred to a future set). Next: **Sets 19–20 — UI polish + remaining roadmap**.
+
+Active work (2026-06-07): a UI audit surfaced ~14 issues. Fixing them set-by-set. **Sets 19A–19F** track the fixes:
+- **Set 19A (in progress) — Brand + security.** `ADMIN_SECRET` env var name removed from `/admin/login`. Brand mark `IS → S` in the 3 spots the rebrand sweep missed (`/shops`, `/apply`, marketing footer). Favicon: `src/app/icon.png` (64×64 ink-square with white "S") + `public/favicon.ico` fallback. `scripts/make-favicon.mjs` regenerates from a temp HTML/Puppeteer render.
+- **Set 19B — Page metadata.** Per-page `<title>` + `description` on `/apply`, `/s/[slug]/checkout`, `/dashboard/orders/[id]`, `/dashboard/promotions`, `/dashboard/customers`, `/dashboard/returns`. Currently fall through to the marketing default.
+- **Set 19C — Visual bugs.** Hero "Handpicked" overflow on `/s/riya` (font-size clamp on the 3rd headline line). Replace broken Unsplash IDs in testimonials + featured shop.
+- **Set 19D — UX polish.** "Coming soon" treatment for empty storefronts on `/shops`; settings hero image helper; customers LTV spacing; sidebar order (keep Returns as-is).
+- **Set 19E — A11y/perf.** `whileInView` reduced-motion fallback + visibility timeout for storefront product cards (currently invisible to scrapers/reduced-motion users).
+- **Set 19F (optional) — Trust strip text size; per-page titles for admin pages.
 
 Beyond the plan:
 
@@ -316,6 +324,13 @@ log entry and mark it done in PLAN.md.
     - **package.json** `"name": "sawpd"`.
     - **MIND.md / PLAN.md** updated headers and a leading rebrand note; historical change-log entries preserve the prior name as project history.
     - **Not changed**: store slug (`/s/riya`, `/s/kabir`), file paths, type/variable names, data files, dev port. Seller-facing strings that mention "your shop" / "this shop" / "the shop" all stay generic.
+
+- **Set 19A (2026-06-07) — UI fixes: brand + security + favicon**
+  - **Security: removed `ADMIN_SECRET` env var name from `/admin/login`.** Was rendered as a `<code>` chip on the login page — leaked the env var name to anyone hitting `/admin/login`. Replaced with "Enter the admin password to continue." (src/app/admin/login/page.tsx:23-25).
+  - **Rebrand regression caught: 3 brand marks still said "IS" instead of "S".** The original Set 18 sweep missed `/shops` (src/app/shops/page.tsx:23-25), `/apply` (src/app/apply/layout.tsx:13-15), and the marketing footer (src/components/landing/marketing-footer.tsx:11-13). All swapped to "S" and verified via curl + screenshot. The 2 places that were correctly updated in Set 18 (`marketing-header.tsx`, `admin-shell.tsx`) were untouched.
+  - **Favicon added.** New `src/app/icon.png` (64×64, ink-square + white "S", rendered via `scripts/make-favicon.mjs` using Puppeteer + system Chrome). Next.js auto-injects `<link rel="icon" href="/icon.png?...">`. `public/favicon.ico` (32×32, generated from icon.png via `sips`) is a legacy fallback for older browsers. Both return 200. Was previously a 404 on every page.
+  - **UI audit infrastructure.** New `scripts/ui-crawl.mjs` crawls all 19 routes (public + admin + dashboard), captures console errors, network failures, broken images, missing alt text, horizontal overflow, page titles, meta descriptions, and saves full-page screenshots to `/tmp/sawpd-ui-shots/`. New `scripts/ui-deep-dive.mjs` does scroll-to-trigger and interaction tests (e.g. hovers a product card, counts shops, rechecks admin login for the env var leak). Both are reusable for future audits.
+  - `pnpm typecheck` + `pnpm lint` both pass.
 
 ## 9. Open questions / future decisions
 

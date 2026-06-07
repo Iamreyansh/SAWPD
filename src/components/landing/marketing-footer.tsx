@@ -9,7 +9,7 @@ export function MarketingFooter() {
           <div className="md:col-span-5">
             <Link href="/" className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-bone font-bold text-sm">
-                IS
+                S
               </span>
               <span className="text-[15px] font-semibold tracking-[-0.02em] text-ink">
                 SAWPD
