@@ -358,6 +358,15 @@ log entry and mark it done in PLAN.md.
   - **Customers page LTV column** (`src/components/dashboard/customers-client.tsx:144-149`): added `tabular-nums` to the value (rupee amounts now align column-wise), `mt-0.5` + `text-[10.5px]` + `tracking-[0.1em]` + `text-ink/45` on the LTV label (slightly larger, more breathing room, slightly less faded). Was: 10px, no top margin, no tabular-nums.
   - `pnpm typecheck` + `pnpm lint` both pass. Verified via screenshots: `setD-shops-full.png` shows both Riya and Earthen sections; `setD-settings.png` shows the live preview; `setD-customers-after.png` shows the cleaner LTV column.
 
+- **Set 19E (2026-06-07) — A11y/perf: product card animation safety net**
+  - The storefront product cards used `whileInView` with `initial: { opacity: 0, y: 24 }`, so the cards were permanently invisible for headless scrapers, `prefers-reduced-motion: reduce` users, and slow scrollers.
+  - **Fix in `src/components/storefront/product-card.tsx`**:
+    1. `useReducedMotion()` from framer-motion — if true, render a plain `<div className="group">` with no motion props.
+    2. A 1.5s safety-net timer — if `whileInView` hasn't fired by then, swap to the plain `<div>` so the card is never stuck invisible.
+    3. A `mounted` flag — the swap only happens post-hydration to avoid SSR/client mismatch (the server renders motion.div because `useReducedMotion()` returns `null` in Node, but the client would otherwise swap to plain div immediately).
+  - Refactored the card body into a `renderCard({...})` helper so both the animated and static branches share the exact same inner content.
+  - `pnpm typecheck` + `pnpm lint` both pass. Verified via Puppeteer probe: normal motion t=0 → 7 animated/2 visible, t=2s → 0 animated/9 visible; reduced motion t=2s → 0 animated/9 visible. No hydration warnings on either path. Screenshot at `/tmp/sawpd-ui-shots/setE-products.png` shows the grid renders cleanly.
+
 ## 9. Open questions / future decisions
 
 - **Email provider**: Resend recommended. Swap point: `lib/notify.ts#deliver()`.
