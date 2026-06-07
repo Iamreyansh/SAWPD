@@ -17,6 +17,7 @@ public/uploads/*
 
 # Marketing artifacts (regenerable via scripts/render-one-pager.mjs)
 sawpd-one-pager.pdf
+SAWPD_DEPLOY_KEY.pub
 
 # IDE / editor
 .vscode/
