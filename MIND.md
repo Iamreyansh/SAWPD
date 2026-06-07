@@ -345,6 +345,13 @@ log entry and mark it done in PLAN.md.
   - Verified via curl: 7/7 pages serve the expected title and description.
   - `pnpm typecheck` + `pnpm lint` both pass.
 
+- **Set 19C (2026-06-07) — Visual bugs**
+  - **Storefront hero overflow on `/s/riya`**: "Handpicked." (10 chars) at `display-xl` (max 120px) was clipping the right edge of the col-span-7 (720px) on the landing grid. Switched the storefront hero h1 from `display-xl` to `display-l` (max 72px). The marketing hero keeps `display-xl` (its headlines are longer per line, no overflow). Verified: H1 scrollWidth 595 < parent 626.
+  - **Image diversity on landing**: same Unsplash photo `photo-1483985988355-763728e1935b` was being used in 3 places — Riya's store hero (data/store.json), the testimonials section background, and (as a side effect) the featured-shops card on `/`. The UI audit flagged the featured-shops card as showing a "broken" image. Investigation: the next/image proxy returns 200 (verified via curl with 58KB WebP), but headless Chromium never completes the decode (stays at `complete: false`, `naturalWidth: 0`). The image works as a CSS `background-image` (testimonials) but not as an `<img>` (featured-shops) — a Chromium decoder quirk. Replaced with two different verified-working photos: `photo-1490481651871-ab68de25d43d` for Riya's store hero (clothing rack), and `photo-1469334031218-e382a71b716b` for the testimonials background (creator portrait).
+  - `data/store.json` is gitignored (local dev state only) — the image change is on the local file system but won't be in the GitHub repo. The repo is in sync; production data lives wherever SAWPD is deployed.
+  - The UI audit's "1 broken image" report is a false positive caused by lazy-loaded `next/image` + the audit's `fullPage: true` screenshot (which doesn't always trigger lazy load). After explicit scroll, the image loads (`naturalWidth: 360, complete: true`). Not a real broken image — the audit just catches anything below the fold. Documented for future audits.
+  - `pnpm typecheck` + `pnpm lint` both pass. Fresh screenshots at `/tmp/sawpd-ui-shots/setC-{riya-hero,landing-shops,landing-testimonials}.png`.
+
 ## 9. Open questions / future decisions
 
 - **Email provider**: Resend recommended. Swap point: `lib/notify.ts#deliver()`.
