@@ -13,7 +13,7 @@
 
 1. **What**: A Next.js 15 app for Instagram creators — they apply, get approved,
    get a `/s/<slug>` storefront, take UPI orders, verify screenshots, ship.
-2. **Where**: `/Users/rey/Desktop/m3test`. Working dir of this opencode session.
+2. **Where**: `/Users/rey/Desktop/SAWPD`. Working dir of this opencode session. (Renamed from `m3test` on 2026-06-07.)
 3. **Status**: MVP complete + 6 polish/feature sets shipped. `pnpm typecheck` and
    `pnpm lint` both pass. **No tests yet.**
 4. **What to do next**: pick the first item under **"Next set — pick this up"**
@@ -22,7 +22,7 @@
 ## 1. Quick start (verification)
 
 ```bash
-cd /Users/rey/Desktop/m3test
+cd /Users/rey/Desktop/SAWPD
 pnpm typecheck         # tsc --noEmit  → must pass
 pnpm lint              # next lint     → must pass
 pnpm dev               # start dev server on :3000
@@ -193,7 +193,7 @@ Beyond the plan:
 When you finish a set, append a new entry under **Change log** and bump the
 remaining items in this section.
 
-**Full feature roadmap** lives in `/Users/rey/Desktop/m3test/PLAN.md` (Sets 8–20).
+**Full feature roadmap** lives in `/Users/rey/Desktop/SAWPD/PLAN.md` (Sets 8–20).
 Sets 8+ are plan-driven work, not TODO. After completing a set, append a Change
 log entry and mark it done in PLAN.md.
 

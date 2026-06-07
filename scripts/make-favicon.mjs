@@ -1,5 +1,10 @@
 import puppeteer from "puppeteer-core";
 import { writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const outPath = resolve(__dirname, "../src/app/icon.png");
 
 const html = `<!doctype html>
 <html><head><style>
@@ -18,6 +23,6 @@ const page = await browser.newPage();
 await page.setViewport({ width: 64, height: 64 });
 await page.setContent(html, { waitUntil: "networkidle0" });
 const buf = await page.screenshot({ type: "png", omitBackground: false });
-writeFileSync("/Users/rey/Desktop/m3test/src/app/icon.png", buf);
+writeFileSync(outPath, buf);
 await browser.close();
-console.log("wrote src/app/icon.png (" + buf.length + " bytes)");
+console.log("wrote " + outPath + " (" + buf.length + " bytes)");
