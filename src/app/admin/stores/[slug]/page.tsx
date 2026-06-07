@@ -12,7 +12,20 @@ import { OrderStatusBadge } from "@/components/dashboard/order-status-badge";
 import { StoreControls } from "./store-controls";
 import { formatINR } from "@/lib/utils";
 
-export const metadata = { title: "Admin · Store" };
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  const store = await getStore(slug);
+  return {
+    title: store ? `Admin · ${store.name}` : "Admin · Store",
+    description: store
+      ? `Inspect, suspend, or change the plan for ${store.name}.`
+      : "Store detail and controls.",
+  };
+}
 export const dynamic = "force-dynamic";
 
 function timeAgo(iso: string): string {

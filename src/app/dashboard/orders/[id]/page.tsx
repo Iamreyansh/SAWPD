@@ -14,6 +14,19 @@ import { OrderReturnsPanel } from "./order-returns-panel";
 
 export const dynamic = "force-dynamic";
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  return {
+    title: `Order ${id} · Dashboard`,
+    description:
+      "View order details, verify payment, mark shipped, and manage returns.",
+  };
+}
+
 export default async function OrderDetailPage({
   params,
 }: {

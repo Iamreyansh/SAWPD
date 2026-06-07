@@ -12,6 +12,20 @@ export async function generateStaticParams(): Promise<Params[]> {
   return slugs.map((slug) => ({ slug }));
 }
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<Params>;
+}) {
+  const { slug } = await params;
+  const store = await getStore(slug);
+  if (!store) return { title: "Checkout" };
+  return {
+    title: `Checkout · ${store.name} — SAWPD`,
+    description: `Complete your order and pay via UPI. UPI payments land directly in ${store.name}'s account.`,
+  };
+}
+
 export default async function CheckoutPage({
   params,
 }: {

@@ -4,6 +4,10 @@ import { listPromosForStore } from "@/lib/promos";
 import { isAdmin } from "@/lib/admin-auth";
 import { PromotionsClient } from "@/components/dashboard/promotions-client";
 
+export const metadata = {
+  title: "Dashboard · Promotions",
+  description: "Create and manage discount codes for your shop.",
+};
 export const dynamic = "force-dynamic";
 
 export default async function PromotionsPage() {

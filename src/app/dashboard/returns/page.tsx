@@ -8,7 +8,11 @@ import { formatINR, cn } from "@/lib/utils";
 import { DEFAULT_RETURNS_POLICY } from "@/types/storefront";
 import type { ReturnStatus } from "@/lib/returns";
 
-export const metadata = { title: "Dashboard · Returns" };
+export const metadata = {
+  title: "Dashboard · Returns",
+  description:
+    "Review and decide on customer return requests. Approve, reject, or refund.",
+};
 export const dynamic = "force-dynamic";
 
 const STATUS_STYLES: Record<

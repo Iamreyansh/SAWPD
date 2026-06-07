@@ -5,6 +5,10 @@ import { listOrders } from "@/lib/orders";
 import { aggregateCustomers } from "@/lib/customers";
 import { CustomersClient } from "@/components/dashboard/customers-client";
 
+export const metadata = {
+  title: "Dashboard · Customers",
+  description: "See your buyers, their lifetime value, and order history.",
+};
 export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {
