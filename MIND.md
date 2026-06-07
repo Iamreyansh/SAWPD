@@ -374,6 +374,20 @@ log entry and mark it done in PLAN.md.
 
 **All 6 UI fix sets (19A–19F) complete.** That's 14 issues from the 2026-06-07 audit, all fixed and pushed.
 
+- **Set 20 (2026-06-07) — Folder rename `m3test` → `SAWPD`**
+  - Renamed `/Users/rey/Desktop/m3test` → `/Users/rey/Desktop/SAWPD` (deferred from the 2026-06-07 deploy, picked up now).
+  - **Pre-rename cleanup** (commit `70fef0a`):
+    - `scripts/make-favicon.mjs` no longer hardcodes the path. Uses `import.meta.url` + `fileURLToPath` + `resolve(__dirname, "../src/app/icon.png")`. Script now works from any location.
+    - MIND.md updated: §0 "Where" line, §1 quick-start `cd`, §1 PLAN.md pointer.
+  - **Post-rename verification**:
+    - Git remote (`git@github.com:Iamreyansh/SAWPD.git`) intact, on `main`, 10 commits in.
+    - SSH key (`~/.ssh/sawpd_deploy`) still authenticates to GitHub as `Iamreyansh`.
+    - `pnpm typecheck` + `pnpm lint` both pass.
+    - `pnpm dev` restarted, serving HTTP 200 on `/`, `/shops`, `/s/riya`, `/track`, `/admin`, `/admin/stores` (and 307 redirect on `/admin/login` for unauthenticated requests — correct).
+    - UI re-audit: 19/19 routes return 200, 0 console errors, 0 network failures, 0 horizontal overflow. 1 "broken image" flag (the same lazy-load false positive from Set 19C, unchanged).
+    - `scripts/make-favicon.mjs` tested from new path — wrote `src/app/icon.png` correctly.
+  - The intentional backup tarball `~/Desktop/m3test-backup-pre-set16-20260606-194922.tar.gz` keeps the old name (do not rename — it's the snapshot's identity).
+
 ## 9. Open questions / future decisions
 
 - **Email provider**: Resend recommended. Swap point: `lib/notify.ts#deliver()`.
