@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Hourglass } from "lucide-react";
 import { listStoreSummaries } from "@/lib/stores";
 
 export const metadata = {
@@ -13,7 +13,8 @@ export const dynamic = "force-dynamic";
 
 export default async function ShopsPage() {
   const summaries = await listStoreSummaries();
-  const shops = summaries.filter((s) => s.productCount > 0);
+  const live = summaries.filter((s) => s.productCount > 0);
+  const comingSoon = summaries.filter((s) => s.productCount === 0);
 
   return (
     <div className="min-h-screen bg-bone">
@@ -48,21 +49,9 @@ export default async function ShopsPage() {
           </p>
         </div>
 
-        {shops.length === 0 ? (
-          <div className="mt-16 rounded-2xl border border-dashed border-ink/15 p-12 text-center">
-            <p className="text-[15px] text-ink/60">
-              No live shops yet. Be the first —
-              <Link
-                href="/apply"
-                className="ml-1 font-semibold text-vermillion hover:underline"
-              >
-                apply for access →
-              </Link>
-            </p>
-          </div>
-        ) : (
+        {live.length > 0 && (
           <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {shops.map((s) => (
+            {live.map((s) => (
               <Link
                 key={s.store.slug}
                 href={`/s/${s.store.slug}`}
@@ -108,6 +97,79 @@ export default async function ShopsPage() {
                 </div>
               </Link>
             ))}
+          </div>
+        )}
+
+        {comingSoon.length > 0 && (
+          <div className="mt-12">
+            <div className="mb-5 flex items-center gap-3">
+              <span className="hairline flex-1" />
+              <p className="eyebrow-ink">Coming soon</p>
+              <span className="hairline flex-1" />
+            </div>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {comingSoon.map((s) => (
+                <div
+                  key={s.store.slug}
+                  className="group flex flex-col overflow-hidden rounded-2xl border border-dashed border-ink/15 bg-bone/60"
+                >
+                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-ink/[0.04]">
+                    <Image
+                      src={s.store.heroImage}
+                      alt={s.store.name}
+                      fill
+                      sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                      className="object-cover opacity-50 grayscale"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-bone/40">
+                      <div className="inline-flex items-center gap-2 rounded-full bg-ink px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-bone">
+                        <Hourglass className="h-3 w-3" strokeWidth={2.25} />
+                        Coming soon
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-1 flex-col p-5">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="text-[18px] font-bold tracking-[-0.02em] text-ink">
+                        {s.store.name}
+                      </p>
+                      <span className="text-[12.5px] text-ink/40 tabular-nums">
+                        —
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[12.5px] text-ink/45">
+                      {s.store.heroKicker} · {s.store.ownerHandle}
+                    </p>
+                    <p className="mt-3 text-[12.5px] text-ink/50">
+                      Setting up shop. Follow them on Instagram for first drops.
+                    </p>
+                    <a
+                      href={`https://instagram.com/${s.store.ownerHandle.replace("@", "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-ink/55 transition-colors hover:text-ink"
+                    >
+                      Follow {s.store.ownerHandle} on Instagram
+                      <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.25} />
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {live.length === 0 && comingSoon.length === 0 && (
+          <div className="mt-16 rounded-2xl border border-dashed border-ink/15 p-12 text-center">
+            <p className="text-[15px] text-ink/60">
+              No live shops yet. Be the first —
+              <Link
+                href="/apply"
+                className="ml-1 font-semibold text-vermillion hover:underline"
+              >
+                apply for access →
+              </Link>
+            </p>
           </div>
         )}
       </main>

@@ -36,6 +36,7 @@ export function SettingsForm({ store }: { store: SellerStore }) {
   const {
     register,
     handleSubmit,
+    watch,
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -131,9 +132,14 @@ export function SettingsForm({ store }: { store: SellerStore }) {
           </Field>
         </div>
         <div className="mt-4">
-          <Field label="Hero image URL" error={fieldErrors.heroImage}>
+          <Field
+            label="Hero image URL"
+            error={fieldErrors.heroImage}
+            hint="Use a 4:5 or 5:4 portrait photo (1200×1600 or larger). Try Unsplash, your own CDN, or a product shot."
+          >
             <Input {...register("heroImage")} />
           </Field>
+          <HeroImagePreview url={watch("heroImage")} />
         </div>
       </Section>
 
@@ -184,6 +190,40 @@ function Section({
       <p className="mt-1 text-[13.5px] text-ink/55">{description}</p>
       <div className="mt-5">{children}</div>
     </section>
+  );
+}
+
+function HeroImagePreview({ url }: { url: string }) {
+  if (!url) {
+    return (
+      <div className="mt-3 flex h-32 w-32 items-center justify-center rounded-xl border border-dashed border-ink/15 bg-ink/[0.02] text-[11px] text-ink/40">
+        No image
+      </div>
+    );
+  }
+  let valid = false;
+  try {
+    new URL(url);
+    valid = true;
+  } catch {
+    /* not a URL */
+  }
+  if (!valid) return null;
+  return (
+    <div className="mt-3 flex items-center gap-3">
+      <div className="relative h-24 w-20 overflow-hidden rounded-lg border border-ink/10 bg-ink/[0.04]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={url}
+          alt="Hero preview"
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.opacity = "0";
+          }}
+        />
+      </div>
+      <p className="text-[11.5px] text-ink/45">Preview · saved on submit</p>
+    </div>
   );
 }
 

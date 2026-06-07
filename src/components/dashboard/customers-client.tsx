@@ -142,8 +142,12 @@ export function CustomersClient({
                     )}
                   </div>
                   <div className="col-span-12 text-right sm:col-span-2">
-                    <p className="font-medium text-ink">{formatINR(c.lifetimeValue)}</p>
-                    <p className="text-[10px] uppercase tracking-wide text-ink/40">LTV</p>
+                    <p className="font-medium tabular-nums text-ink">
+                      {formatINR(c.lifetimeValue)}
+                    </p>
+                    <p className="mt-0.5 text-[10.5px] uppercase tracking-[0.1em] text-ink/45">
+                      LTV
+                    </p>
                   </div>
                   <div className="col-span-12 text-right sm:col-span-2">
                     <p className="text-xs text-ink/60">{formatDate(c.lastOrderAt)}</p>
