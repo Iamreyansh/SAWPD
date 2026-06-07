@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { addApplication } from "@/lib/applications";
+import { getCurrentSeller } from "@/lib/seller-auth";
 import { notifyApplicationReceived } from "@/lib/notify";
 import type { ApplicationInput } from "@/types/applications";
 
@@ -61,7 +62,12 @@ export async function submitApplication(
     };
   }
 
-  const app = await addApplication(parsed.data as ApplicationInput);
+  // If the applicant is signed in, attach their sellerId so the admin
+  // approval flow can hand the resulting store back to the same account.
+  const seller = await getCurrentSeller();
+  const app = await addApplication(parsed.data as ApplicationInput, {
+    sellerId: seller?.id,
+  });
   await notifyApplicationReceived({
     storeName: app.storeName,
     applicantName: app.fullName,

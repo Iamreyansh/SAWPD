@@ -38,7 +38,8 @@ Admin login (set in `.env.local`):
 - **TypeScript** (strict), **Tailwind 3**, **Framer Motion**, **Zustand**, **Zod**, **react-hook-form**.
 - **pnpm** workspace. Scripts: `dev`, `build`, `start`, `lint`, `typecheck`.
 - **Storage**: file-based JSON in `data/` (gitignored). No DB. No Supabase.
-- **Auth**: single signed cookie (`sawpd_admin`) HMAC-SHA256 with `ADMIN_SECRET`.
+- **Auth (admin)**: signed cookie `sawpd_admin`, HMAC-SHA256 with `ADMIN_SECRET`.
+- **Auth (seller)** *(Set 21)*: signed cookie `sawpd_seller` (`v1.{sellerId}.{hmac}`), bcrypt password hashes in `data/sellers.json`. 1 seller = N stores. Seller dashboard uses `getStoreForSeller(slug, seller.id)` for ownership-checked reads. Active store tracked in a separate signed cookie `sawpd_active_store`.
 - **Payment**: no gateway. UPI QR generated client-side via `qrcode`. Owner manually
   verifies screenshots.
 - **Email**: stubbed. `lib/notify.ts#deliver()` writes to `data/notifications.log`
@@ -153,42 +154,21 @@ The `kabir` store has no products — visiting `/s/kabir` shows the empty-state
 
 ## 7. Next set — pick this up
 
-The Sets 8–20 plan is the active queue (see `PLAN.md`). The rebrand landed as Set 18 (in-place; the planned SEO/share-assets scope deferred to a future set). Next: **Sets 19–20 — UI polish + remaining roadmap**.
+The Sets 8–20 plan is the active queue (see `PLAN.md`). Sets 19A–19F + 20 (folder rename) + 21 (per-seller auth) are all done. Next: **#3 Resend email provider** (small, ~1 hour) — install `resend`, add `RESEND_API_KEY` to `.env.local` template, swap `lib/notify.ts#deliver()` from `console.log` to `resend.emails.send()`. Add React Email templates for `notifyApplicationReceived` and `notifyStoreEmail`. Verify with Resend's test domain first.
 
-Active work (2026-06-07): a UI audit surfaced ~14 issues. Fixing them set-by-set. **Sets 19A–19F** track the fixes:
-- **Set 19A (in progress) — Brand + security.** `ADMIN_SECRET` env var name removed from `/admin/login`. Brand mark `IS → S` in the 3 spots the rebrand sweep missed (`/shops`, `/apply`, marketing footer). Favicon: `src/app/icon.png` (64×64 ink-square with white "S") + `public/favicon.ico` fallback. `scripts/make-favicon.mjs` regenerates from a temp HTML/Puppeteer render.
-- **Set 19B — Page metadata.** Per-page `<title>` + `description` on `/apply`, `/s/[slug]/checkout`, `/dashboard/orders/[id]`, `/dashboard/promotions`, `/dashboard/customers`, `/dashboard/returns`. Currently fall through to the marketing default.
-- **Set 19C — Visual bugs.** Hero "Handpicked" overflow on `/s/riya` (font-size clamp on the 3rd headline line). Replace broken Unsplash IDs in testimonials + featured shop.
-- **Set 19D — UX polish.** "Coming soon" treatment for empty storefronts on `/shops`; settings hero image helper; customers LTV spacing; sidebar order (keep Returns as-is).
-- **Set 19E — A11y/perf.** `whileInView` reduced-motion fallback + visibility timeout for storefront product cards (currently invisible to scrapers/reduced-motion users).
-- **Set 19F (optional) — Trust strip text size; per-page titles for admin pages.
+After that: **#5 Vitest** (medium, ~1 day) — install `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`. Add `vitest.config.ts` + `vitest.setup.ts`. First test suite: `lib/promos.ts` (pure logic) + `lib/applications.ts` (FS, use `memfs`). Add `pnpm test` script + CI-lite via `pnpm typecheck && pnpm lint && pnpm test`.
+
+Then: **#6 customer phone-OTP** (medium, ~1 day) — SMS provider decision pending (MSG91 vs Twilio vs email-the-OTP). Parked for v1.1; depends on Resend being live.
+
+Deferred: **#4 Razorpay** (the user explicitly said "1 2 3 5 6" — Razorpay is not in the next-3). When we get to it: replace `lib/store.ts#activatePlanMock` with a real checkout, add `app/api/razorpay/webhook/route.ts` to flip `store.plan` on successful subscription, verify HMAC signature.
 
 Beyond the plan:
 
-1. **Per-seller auth** (medium, ~half day)
-   - Currently the dashboard is single-tenant (`getFirstStore` + single admin cookie).
-   - Add a `lib/seller-auth.ts` (mirror of `admin-auth.ts`) with a `seller_<slug>`
-     cookie. Wire `/admin/login` to optionally pick a store, or add
-     `/dashboard/login` for sellers.
-   - Replace `getFirstStore` in dashboard pages with `getStoreForSession`.
-
-2. **Real email provider** (small, ~1 hour)
-   - Pick one (Resend is simplest). Add dep, env var.
-   - Replace `deliver()` in `lib/notify.ts`. Add a smoke test path.
-
-3. **Real payment gateway — Razorpay** (medium, ~1 day)
-   - Replace `lib/store.ts#activatePlanMock` with a real checkout.
-   - Add `app/api/razorpay/webhook/route.ts` to flip `store.plan` on successful
-     subscription. Verify HMAC signature.
-   - Plan picker becomes "Pay with Razorpay" instead of "Activate".
-
-4. **Tests** (ongoing, ~2 days for full coverage)
-   - Pick Vitest (Next.js friendly, fast).
-   - Start with `lib/trial.ts`, `lib/promos.ts`, `lib/payment-check.ts` (pure logic).
-   - Then a couple of action tests for `placeOrder` (mock the lib calls).
-
-5. **Build artefacts cleanup** (trivial, ~5 min)
-   - Delete `.next/` and `tsconfig.tsbuildinfo` from working dir. They regenerate.
+1. ~~**Per-seller auth**~~ (DONE 2026-06-07 in Set 21) — see Change log.
+2. **Real email provider** (small, ~1 hour) — Resend. Swap point: `lib/notify.ts#deliver()`.
+3. **Real payment gateway — Razorpay** (medium, ~1 day) — deferred per user.
+4. **Tests** (ongoing, ~2 days for full coverage) — Vitest. Start with `lib/trial.ts`, `lib/promos.ts`, `lib/payment-check.ts` (pure logic).
+5. **Build artefacts cleanup** (trivial, ~5 min) — Delete `.next/` and `tsconfig.tsbuildinfo` from working dir. They regenerate.
 
 When you finish a set, append a new entry under **Change log** and bump the
 remaining items in this section.
@@ -386,7 +366,34 @@ log entry and mark it done in PLAN.md.
     - `pnpm dev` restarted, serving HTTP 200 on `/`, `/shops`, `/s/riya`, `/track`, `/admin`, `/admin/stores` (and 307 redirect on `/admin/login` for unauthenticated requests — correct).
     - UI re-audit: 19/19 routes return 200, 0 console errors, 0 network failures, 0 horizontal overflow. 1 "broken image" flag (the same lazy-load false positive from Set 19C, unchanged).
     - `scripts/make-favicon.mjs` tested from new path — wrote `src/app/icon.png` correctly.
-  - The intentional backup tarball `~/Desktop/m3test-backup-pre-set16-20260606-194922.tar.gz` keeps the old name (do not rename — it's the snapshot's identity).
+    - The intentional backup tarball `~/Desktop/m3test-backup-pre-set16-20260606-194922.tar.gz` keeps the old name (do not rename — it's the snapshot's identity).
+- **Set 21 — Per-seller auth (rollout)**: Seller accounts (email + password) now own the stores. 1 seller = N stores. Wiped all local data; cookie-based session; `/dashboard` migrated off `isAdmin`. Admin path still uses the separate `sawpd_admin` cookie. Stores now have required `sellerId` foreign key.
+  - **New files**:
+    - `src/lib/sellers.ts` — `Seller` / `PublicSeller` types, bcrypt (10 rounds), `sel_<uuid8>` ids, `findSellerByEmail`, `findSellerById`, `createSeller`, `verifyPassword`, `normalizeEmail`. Schema: `{ id, email, passwordHash, createdAt }` in `data/sellers.json`.
+    - `src/lib/seller-auth.ts` — signed cookie `sawpd_seller` (`v1.{sellerId}.{hmac-sha256 sig}`), 30-day max-age, HMAC over `ADMIN_SECRET` (TODO: split into `SELLER_SECRET` in v1.1). Functions: `createSellerSession`, `clearSellerSession`, `getCurrentSeller`, `requireSeller` (redirects to `/seller/login`), `setActiveStoreSlug`, `clearActiveStoreSlug`, `getActiveStoreSlugFromCookie`. Also a separate signed `sawpd_active_store` cookie for which shop is being managed.
+    - `src/app/seller/actions.ts` — `sellerSignupAction`, `sellerLoginAction`, `sellerLogoutAction`, `setActiveStoreAction`. Zod validated (email + password min 8). Returns `SellerAuthResult = { ok: true } | { ok: false; error, fieldErrors? }`. Distinct errors: `email_taken` / `not_found` / `bad_password` / `invalid`.
+    - `src/app/seller/signup/{page,signup-form}.tsx` — redirects to `/dashboard` if already logged in; on success pushes to `/apply`.
+    - `src/app/seller/login/{page,login-form}.tsx` — same shell, on success pushes to `/dashboard`.
+    - `data/sellers.json` — created (empty `[]`).
+    - `scripts/smoke-seller-auth.mjs` — Puppeteer e2e: signup → apply (4 steps) → admin approve → login again → verify store in dashboard. Screenshots in `/tmp/sawpd-set21-shots/`.
+    - `scripts/smoke-dashboard-shot.mjs` — quick screenshot of a seller's dashboard with a forged cookie.
+    - `scripts/mint-seller-cookie.mjs` — mints a valid `sawpd_seller` cookie for a given sellerId (uses HMAC over `ADMIN_SECRET` from `.env.local`). Useful for curl tests.
+  - **Modified**:
+    - `src/types/seller.ts` — added `Seller` and `PublicSeller` types. `SellerStore` now has **required** `sellerId: string` (breaking — all callers must provide it).
+    - `src/types/applications.ts` — `Application` gained optional `sellerId?: string` (foreign key into `data/sellers.json`).
+    - `src/lib/store.ts` — new: `getStoresForSeller(sellerId)`, `getStoreForSeller(slug, sellerId)` (ownership-checked read, returns null if IDOR), `getFirstStore(sellerId?)` (backward-compat: omit `sellerId` for legacy global first store, pass `sellerId` to scope), `getActiveStoreForSeller(sellerId, preferredSlug?)` (validates cookie + ownership + falls back to first), `addStore(input, sellerId)` (slugified from name, uniquifies on collision). `updateStore` and `activatePlanMock` now accept `options: { asSellerId }` for ownership-checked writes. `readStoreMap()` tolerates `[]` from a pre-Set 21 wipe (treats as `{}`) — without this, the data race when wiping would silently drop new stores (the `addStore` bug we hit and fixed mid-test).
+    - `src/lib/applications.ts` — `addApplication(input, options?: { sellerId })` stamps the foreign key.
+    - `src/app/apply/actions.ts` — now calls `getCurrentSeller()` and passes `{ sellerId: seller?.id }` to `addApplication`. Guest applications still work (no sellerId).
+    - `src/app/apply/page.tsx` — top banner: signed-in → "Applying as {email} — your shop will be linked to this account." + "Go to dashboard →"; signed-out → "Heads up: create a free seller account first" + "Create account →" / "Log in" links.
+    - `src/app/admin/actions.ts` — `decideAction` now provisions the store on approval: requires `application.sellerId` to be set (rejects with helpful error if not), generates a slug from `storeName`, uniquifies on collision, sets a 14-day trial, copies `notifyEmail` from the application, copies `whatsapp` from the application phone, builds a hero with a default Unsplash image, sets a default `returnsPolicy` (disabled, 7 days, any reason).
+    - `src/app/dashboard/layout.tsx` — `requireSeller()` + `getActiveStoreForSeller(seller.id, cookieSlug)`. If no store, shows a polished empty-state with the seller's email and an "Apply for a shop →" CTA. Otherwise renders `<DashboardShell>` with `sellerEmail`, `activeStoreName`, `activeStoreSlug`, and the list of all the seller's stores.
+    - `src/app/dashboard/page.tsx`, `orders/page.tsx`, `orders/[id]/page.tsx`, `products/page.tsx`, `promotions/page.tsx`, `customers/page.tsx`, `returns/page.tsx`, `settings/page.tsx` — all swapped from `isAdmin()` + `getFirstStore()` to `requireSeller()` + `getActiveStoreForSeller(seller.id)`. The order detail page additionally cross-checks that the order's `storeSlug` is in the seller's owned stores (`getStoresForSeller` + `Set.has`) before rendering — no more IDOR via direct URL.
+    - `src/app/dashboard/actions.ts` — every action now ownership-checks via `assertOwnsStore(slug)` (a small helper at the top of the file that calls `requireSeller` + `getStoreForSeller(slug, seller.id)`). For actions that take an `orderId` / `returnId`, the action looks up the order/return first and then calls `assertOwnsStore(returned.storeSlug)`. `updateStore` and `activatePlanMock` calls pass `{ asSellerId: seller.id }`. Order-status and return-decision actions also scope their `getStore` reads to the seller (no more reading any store).
+    - `src/app/api/dashboard/{orders,customers}/route.ts` — swapped from `isAdmin()` to `requireSeller()` (returns 401 instead of redirecting).
+    - `src/components/dashboard/dashboard-shell.tsx` — now `sellerEmail` + `activeStoreName` + `stores[]` props. Sidebar bottom shows: the active store name (when there's >1 store, a "Switch shop" dropdown with all the seller's stores + an "Apply for a new shop" link), "View shop" link, "Apply for another shop" link, the seller's email, and a "Log out" button (calls `sellerLogoutAction`). No more `logoutAction` from admin.
+  - **Data wipe (2026-06-07)**: `data/{store,products,orders,promos,applications,billing,returns,subscribers,sellers}.json` → `[]` or `{}`. `data/{notifications,audit}.log` kept. (The pre-wipe snapshot is in `/tmp/sawpd-pre-set21-backup/` if rollback is needed.)
+  - **Verification**: `pnpm lint` + `pnpm typecheck` clean. `scripts/smoke-seller-auth.mjs` passes: signup → session cookie set → 4-step application submits → admin approves → store is provisioned (slug `smoke-studio`, sellerId `sel_<uuid8>`, 14-day trial) → seller signs back in → dashboard shows "Smoke Studio" with @smoke-studio handle, "Hi, Smoke Studio." greeting, 14-day trial banner, and the seller email in the sidebar. Screenshot: `/tmp/sawpd-set21-shots/13-dashboard-with-store-final.png`. All 11 smoke-tested routes (public + admin + seller + dashboard) return correct codes.
+  - **Bug found + fixed mid-test**: `readStoreMap()` was blindly casting `JSON.parse` to `Record<string, SellerStore>`, which silently corrupted data when the file was `[]` (an array). `addStore` would then assign a non-numeric key to the array, and `JSON.stringify` of an array drops non-numeric properties — so the write appeared to succeed but the file was unchanged. Fixed by checking `!Array.isArray(parsed)` and returning `{}` in that case.
 
 ## 9. Open questions / future decisions
 

@@ -8,8 +8,9 @@ import {
   getProduct,
   updateProduct,
 } from "@/lib/products";
-import { updateOrderStatus } from "@/lib/orders";
-import { updateStore } from "@/lib/store";
+import { getOrder, updateOrderStatus } from "@/lib/orders";
+import { activatePlanMock, getActiveStoreForSeller, getStoreForSeller, updateStore } from "@/lib/store";
+import { requireSeller } from "@/lib/seller-auth";
 import { deleteUploadIfLocal, uploadProductImage } from "@/lib/uploads";
 import { MAX_PRODUCT_IMAGES } from "@/types/storefront";
 import type { ProductImage } from "@/types/storefront";
@@ -53,6 +54,20 @@ function slugify(input: string): string {
     .slice(0, 60) || "item";
 }
 
+/**
+ * Asserts that the current seller owns the store at `slug`. Returns the
+ * seller id so callers can pass it to ownership-checked lib helpers like
+ * `updateStore(..., { asSellerId })` and `activatePlanMock(..., { asSellerId })`.
+ */
+async function assertOwnsStore(slug: string): Promise<string> {
+  const seller = await requireSeller();
+  const store = await getStoreForSeller(slug, seller.id);
+  if (!store) {
+    throw new Error("Store not found or not owned by you.");
+  }
+  return seller.id;
+}
+
 function imageIdsFromUrls(urls: string[]): ProductImage[] {
   return urls.map((url) => ({ id: `img_${crypto.randomUUID().slice(0, 8)}`, url }));
 }
@@ -61,6 +76,7 @@ export async function createProductAction(
   storeSlug: string,
   input: unknown
 ): Promise<ProductResult> {
+  const sellerId = await assertOwnsStore(storeSlug);
   const parsed = productSchema.safeParse(input);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
@@ -83,6 +99,8 @@ export async function createProductAction(
     images: normalized,
     slug: slug?.trim() || slugify(parsed.data.title),
   });
+  // addProduct is a global write — but we've already asserted ownership above.
+  void sellerId;
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/products");
   revalidatePath(`/s/${storeSlug}`);
@@ -94,6 +112,7 @@ export async function updateProductAction(
   id: string,
   input: unknown
 ): Promise<ProductResult> {
+  const sellerId = await assertOwnsStore(storeSlug);
   const parsed = productSchema.safeParse(input);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
@@ -127,6 +146,7 @@ export async function updateProductAction(
       }
     }
   }
+  void sellerId;
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/products");
   revalidatePath(`/s/${storeSlug}`);
@@ -137,6 +157,7 @@ export async function deleteProductAction(
   storeSlug: string,
   id: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sellerId = await assertOwnsStore(storeSlug);
   const previous = await getProduct(storeSlug, id);
   const ok = await deleteProduct(storeSlug, id);
   if (!ok) return { ok: false, error: "Product not found." };
@@ -145,6 +166,7 @@ export async function deleteProductAction(
       await deleteUploadIfLocal(img.url);
     }
   }
+  void sellerId;
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/products");
   revalidatePath(`/s/${storeSlug}`);
@@ -184,10 +206,15 @@ export type OrderResult =
 export async function updateOrderStatusAction(
   input: unknown
 ): Promise<OrderResult> {
+  const seller = await requireSeller();
   const parsed = orderStatusSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Invalid input." };
   }
+  const existing = await getOrder(parsed.data.orderId);
+  if (!existing) return { ok: false, error: "Order not found." };
+  await assertOwnsStore(existing.storeSlug);
+  void seller;
   const updated = await updateOrderStatus(parsed.data.orderId, {
     status: parsed.data.status,
     trackingNote: parsed.data.trackingNote,
@@ -199,9 +226,9 @@ export async function updateOrderStatusAction(
     parsed.data.status === "completed" ||
     parsed.data.status === "cancelled"
   ) {
-    const { getStore } = await import("@/lib/store");
+    const { getStoreForSeller } = await import("@/lib/store");
     const { notifyOrderStatusChanged } = await import("@/lib/notify");
-    const store = await getStore(updated.storeSlug);
+    const store = await getStoreForSeller(updated.storeSlug, seller.id);
     if (store) {
       await notifyOrderStatusChanged({
         storeName: store.name,
@@ -222,17 +249,22 @@ export async function updateOrderStatusAction(
 export async function requestResendAction(
   input: unknown
 ): Promise<OrderResult> {
+  const seller = await requireSeller();
   const parsed = orderStatusSchema.safeParse(input);
   if (!parsed.success || parsed.data.status !== "awaiting_payment") {
     return { ok: false, error: "Invalid request." };
   }
+  const existing = await getOrder(parsed.data.orderId);
+  if (!existing) return { ok: false, error: "Order not found." };
+  await assertOwnsStore(existing.storeSlug);
+  void seller;
   const updated = await updateOrderStatus(parsed.data.orderId, {
     status: "awaiting_payment",
   });
   if (!updated) return { ok: false, error: "Order not found." };
-  const { getStore } = await import("@/lib/store");
+  const { getStoreForSeller } = await import("@/lib/store");
   const { notifyOrderStatusChanged } = await import("@/lib/notify");
-  const store = await getStore(updated.storeSlug);
+  const store = await getStoreForSeller(updated.storeSlug, seller.id);
   if (store) {
     await notifyOrderStatusChanged({
       storeName: store.name,
@@ -261,12 +293,14 @@ export async function choosePlanAction(
   storeSlug: string,
   input: unknown
 ): Promise<PlanResult> {
+  const sellerId = await assertOwnsStore(storeSlug);
   const parsed = planSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Pick a plan." };
   }
-  const { activatePlanMock } = await import("@/lib/store");
-  const result = await activatePlanMock(storeSlug, parsed.data.plan);
+  const result = await activatePlanMock(storeSlug, parsed.data.plan, {
+    asSellerId: sellerId,
+  });
   if (!result) {
     return { ok: false, error: "Store not found." };
   }
@@ -313,6 +347,7 @@ export async function updateStoreAction(
   storeSlug: string,
   input: unknown
 ): Promise<StoreResult> {
+  const sellerId = await assertOwnsStore(storeSlug);
   const parsed = storeSchema.safeParse(input);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
@@ -328,7 +363,9 @@ export async function updateStoreAction(
       fieldErrors,
     };
   }
-  const updated = await updateStore(storeSlug, parsed.data);
+  const updated = await updateStore(storeSlug, parsed.data, {
+    asSellerId: sellerId,
+  });
   if (!updated) return { ok: false, error: "Store not found." };
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
@@ -413,6 +450,7 @@ export async function createPromoAction(
   storeSlug: string,
   input: unknown
 ): Promise<PromoResult> {
+  const sellerId = await assertOwnsStore(storeSlug);
   const parsed = promoSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -430,6 +468,7 @@ export async function createPromoAction(
     };
   }
   const promo = await addPromo(storeSlug, toPromoRecord(parsed.data));
+  void sellerId;
   revalidatePath("/dashboard/promotions");
   return { ok: true, id: promo.id };
 }
@@ -439,6 +478,7 @@ export async function updatePromoAction(
   id: string,
   input: unknown
 ): Promise<PromoResult> {
+  const sellerId = await assertOwnsStore(storeSlug);
   const parsed = promoSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -460,6 +500,7 @@ export async function updatePromoAction(
   }
   const updated = await updatePromo(storeSlug, id, toPromoRecord(parsed.data));
   if (!updated) return { ok: false, error: "Promo code not found." };
+  void sellerId;
   revalidatePath("/dashboard/promotions");
   return { ok: true, id };
 }
@@ -468,8 +509,10 @@ export async function deletePromoAction(
   storeSlug: string,
   id: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sellerId = await assertOwnsStore(storeSlug);
   const ok = await deletePromo(storeSlug, id);
   if (!ok) return { ok: false, error: "Promo code not found." };
+  void sellerId;
   revalidatePath("/dashboard/promotions");
   return { ok: true };
 }
@@ -489,11 +532,11 @@ export type CheckInventoryResult = {
 export async function checkInventoryAction(
   storeSlug: string
 ): Promise<CheckInventoryResult | { ok: false; error: string }> {
-  const { getStore } = await import("@/lib/store");
+  const seller = await requireSeller();
+  const store = await getStoreForSeller(storeSlug, seller.id);
+  if (!store) return { ok: false, error: "Store not found or not owned by you." };
   const { listProductsForStore } = await import("@/lib/products");
   const { notifyLowStock } = await import("@/lib/notify");
-  const store = await getStore(storeSlug);
-  if (!store) return { ok: false, error: "Store not found." };
   const products = await listProductsForStore(storeSlug);
   const flagged = products
     .filter(
@@ -515,10 +558,14 @@ export async function checkInventoryAction(
 }
 
 export async function dismissOnboardingAction(): Promise<{ ok: true }> {
-  const { getFirstStore } = await import("@/lib/store");
-  const store = await getFirstStore();
+  const seller = await requireSeller();
+  const store = await getActiveStoreForSeller(seller.id);
   if (store) {
-    await updateStore(store.slug, { onboardingDismissed: true });
+    await updateStore(
+      store.slug,
+      { onboardingDismissed: true },
+      { asSellerId: seller.id }
+    );
   }
   revalidatePath("/dashboard");
   return { ok: true };
@@ -554,6 +601,7 @@ export async function updateReturnsPolicyAction(
   storeSlug: string,
   input: unknown
 ): Promise<UpdateReturnsPolicyResult> {
+  const sellerId = await assertOwnsStore(storeSlug);
   const parsed = returnsPolicySchema.safeParse(input);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
@@ -567,14 +615,18 @@ export async function updateReturnsPolicyAction(
       fieldErrors,
     };
   }
-  const updated = await updateStore(storeSlug, {
-    returnsPolicy: {
-      enabled: parsed.data.enabled,
-      windowDays: parsed.data.windowDays,
-      mode: parsed.data.mode,
-      policyText: parsed.data.policyText?.trim() || undefined,
+  const updated = await updateStore(
+    storeSlug,
+    {
+      returnsPolicy: {
+        enabled: parsed.data.enabled,
+        windowDays: parsed.data.windowDays,
+        mode: parsed.data.mode,
+        policyText: parsed.data.policyText?.trim() || undefined,
+      },
     },
-  });
+    { asSellerId: sellerId }
+  );
   if (!updated) return { ok: false, error: "Store not found." };
   revalidatePath("/dashboard/settings");
   revalidatePath(`/s/${storeSlug}`);
@@ -585,6 +637,7 @@ export async function updateReturnsPolicyAction(
 export async function decideReturnAction(
   input: unknown
 ): Promise<DecideReturnResult> {
+  const seller = await requireSeller();
   const parsed = decideReturnSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Please check the form." };
@@ -592,6 +645,8 @@ export async function decideReturnAction(
   const { getReturn, updateReturnStatus } = await import("@/lib/returns");
   const existing = await getReturn(parsed.data.id);
   if (!existing) return { ok: false, error: "Return request not found." };
+  await assertOwnsStore(existing.storeSlug);
+  void seller;
   if (existing.status !== "pending") {
     return { ok: false, error: "This return has already been decided." };
   }

@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import Image from "next/image";
 import { Tag, MessageCircle, ShieldCheck, ShieldAlert, ImageOff } from "lucide-react";
-import { isAdmin } from "@/lib/admin-auth";
-import { getFirstStore } from "@/lib/store";
+import { requireSeller } from "@/lib/seller-auth";
+import { getActiveStoreForSeller, getStoresForSeller } from "@/lib/store";
 import { getOrder } from "@/lib/orders";
 import { listReturnsForOrder } from "@/lib/returns";
 import { formatINR, cn } from "@/lib/utils";
@@ -32,12 +32,15 @@ export default async function OrderDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  if (!(await isAdmin())) redirect("/admin/login");
-  const store = await getFirstStore();
-  if (!store) redirect("/dashboard");
+  const seller = await requireSeller();
   const { id } = await params;
   const order = await getOrder(id);
-  if (!order || order.storeSlug !== store.slug) notFound();
+  if (!order) notFound();
+  const sellerStores = await getStoresForSeller(seller.id);
+  const ownedSlugs = new Set(sellerStores.map((s) => s.slug));
+  if (!ownedSlugs.has(order.storeSlug)) notFound();
+  const store = await getActiveStoreForSeller(seller.id, order.storeSlug);
+  if (!store) notFound();
   const returns = await listReturnsForOrder(order.id);
 
   const customerWhatsApp = buildWhatsAppLink(

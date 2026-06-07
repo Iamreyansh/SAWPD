@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { isAdmin } from "@/lib/admin-auth";
-import { getFirstStore } from "@/lib/store";
+import { requireSeller } from "@/lib/seller-auth";
+import { getActiveStoreForSeller } from "@/lib/store";
 import { getTrialState } from "@/lib/trial";
 import { SettingsForm } from "@/components/dashboard/settings-form";
 import { PlanPicker } from "@/components/dashboard/plan-picker";
@@ -22,9 +21,24 @@ function formatDate(iso: string | undefined): string {
 }
 
 export default async function SettingsPage() {
-  if (!(await isAdmin())) redirect("/admin/login");
-  const store = (await getFirstStore()) as SellerStore | null;
-  if (!store) redirect("/dashboard");
+  const seller = await requireSeller();
+  const store = (await getActiveStoreForSeller(seller.id)) as SellerStore | null;
+  if (!store) {
+    return (
+      <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-ink/15 p-12 text-center">
+        <h1 className="display-m text-ink">No shop selected.</h1>
+        <p className="mt-3 text-[14px] text-ink/65">
+          Apply for a shop to start selling.
+        </p>
+        <Link
+          href="/apply"
+          className="mt-6 inline-flex h-10 items-center justify-center rounded-full bg-vermillion px-5 text-[12.5px] font-semibold text-bone hover:bg-vermillion-deep"
+        >
+          Apply now →
+        </Link>
+      </div>
+    );
+  }
 
   const trial = getTrialState(store);
 

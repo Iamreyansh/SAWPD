@@ -11,7 +11,7 @@ import {
 import { decideApplication, getApplication } from "@/lib/applications";
 import { notifyApplicationDecided } from "@/lib/notify";
 import { appendAudit } from "@/lib/audit";
-import { getStore, updateStore } from "@/lib/store";
+import { addStore, getStore, updateStore } from "@/lib/store";
 import { activatePlanMock } from "@/lib/store";
 import { notifyLowStock, notifyStoreEmail } from "@/lib/notify";
 import { listProductsForStore } from "@/lib/products";
@@ -55,6 +55,28 @@ export async function decideAction(input: unknown): Promise<DecisionResult> {
   if (parsed.data.decision === "rejected" && !parsed.data.reviewerNote.trim()) {
     return { ok: false, error: "A reason is required when rejecting." };
   }
+  const original = await getApplication(parsed.data.applicationId);
+  if (!original) {
+    return { ok: false, error: "Application not found." };
+  }
+  if (parsed.data.decision === "approved") {
+    if (!original.sellerId) {
+      return {
+        ok: false,
+        error:
+          "This application has no linked seller account. The applicant must sign up at /seller/signup before they can be approved.",
+      };
+    }
+    const existing = await getStore(
+      (original.storeName ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-")
+    );
+    if (existing) {
+      return {
+        ok: false,
+        error: "A store with that slug already exists. Edit the application first.",
+      };
+    }
+  }
   const updated = await decideApplication(
     parsed.data.applicationId,
     parsed.data.decision,
@@ -63,7 +85,6 @@ export async function decideAction(input: unknown): Promise<DecisionResult> {
   if (!updated) {
     return { ok: false, error: "Application not found." };
   }
-  const original = await getApplication(parsed.data.applicationId);
   if (original) {
     await notifyApplicationDecided({
       storeName: original.storeName,
@@ -72,6 +93,35 @@ export async function decideAction(input: unknown): Promise<DecisionResult> {
       reviewerNote: parsed.data.reviewerNote.trim() || undefined,
     });
   }
+
+  // On approval, provision the store. The seller's id is read from the
+  // application (the seller attached it when they submitted via /apply
+  // while signed in). Trial of 14 days, plan = null until the seller
+  // picks one from /dashboard/settings.
+  if (parsed.data.decision === "approved" && original.sellerId) {
+    const trialEndsAt = new Date(
+      Date.now() + 14 * 24 * 60 * 60 * 1000
+    ).toISOString();
+    const heroImage =
+      "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1600&q=80&auto=format&fit=crop";
+    const created = await addStore(
+      {
+        name: original.storeName,
+        ownerHandle: original.instagramHandle.replace(/^@/, "") || original.storeName.toLowerCase(),
+        heroImage,
+        heroKicker: original.niche,
+        heroHeadline: [original.storeName, "by " + original.fullName.split(" ")[0]],
+        heroSub: "Welcome to " + original.storeName + " on SAWPD.",
+        upiId: "your-upi@bank",
+        notifyEmail: original.email,
+        whatsapp: original.phone,
+        returnsPolicy: { enabled: false, windowDays: 7, mode: "any" },
+      },
+      original.sellerId
+    );
+    await updateStore(created.slug, { trialEndsAt });
+  }
+
   if (original) {
     await appendAudit({
       kind: "application_decided",

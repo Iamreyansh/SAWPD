@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { isAdmin } from "@/lib/admin-auth";
-import { getFirstStore } from "@/lib/store";
+import { requireSeller } from "@/lib/seller-auth";
+import { getActiveStoreForSeller } from "@/lib/store";
 import { listProductsForStore } from "@/lib/products";
 import { listOrders } from "@/lib/orders";
 import { listPromosForStore } from "@/lib/promos";
@@ -30,9 +29,25 @@ function timeAgo(iso: string): string {
 }
 
 export default async function DashboardOverviewPage() {
-  if (!(await isAdmin())) redirect("/admin/login");
-  const store = (await getFirstStore()) as SellerStore | null;
-  if (!store) redirect("/dashboard");
+  const seller = await requireSeller();
+  const store = (await getActiveStoreForSeller(seller.id)) as SellerStore | null;
+  if (!store) {
+    return (
+      <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-ink/15 p-12 text-center">
+        <h1 className="display-m text-ink">No shop selected.</h1>
+        <p className="mt-3 text-[14px] text-ink/65">
+          Hi <span className="font-semibold text-ink">{seller.email}</span> — apply
+          for your first shop to start selling on SAWPD.
+        </p>
+        <Link
+          href="/apply"
+          className="mt-6 inline-flex h-10 items-center justify-center rounded-full bg-vermillion px-5 text-[12.5px] font-semibold text-bone hover:bg-vermillion-deep"
+        >
+          Apply for a shop →
+        </Link>
+      </div>
+    );
+  }
 
   const [orders, products, promos] = await Promise.all([
     listOrders(store.slug),

@@ -104,7 +104,8 @@ function loadDraft(): FormState {
   }
 }
 
-export function ApplyForm() {
+export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
+  void signedIn;
   const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();

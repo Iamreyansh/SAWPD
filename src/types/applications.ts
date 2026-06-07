@@ -29,6 +29,12 @@ export type Application = ApplicationInput & {
   reviewerNote?: string;
   trialEndsAt?: string;
   plan?: Plan;
+  /**
+   * Foreign key into data/sellers.json. Set when the applicant is
+   * signed in at submit time, so the application can be linked back
+   * to the seller's account for onboarding.
+   */
+  sellerId?: string;
 };
 
 export type ApplicationStats = {

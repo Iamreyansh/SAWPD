@@ -33,7 +33,8 @@ export async function getApplication(id: string): Promise<Application | null> {
 }
 
 export async function addApplication(
-  input: ApplicationInput
+  input: ApplicationInput,
+  options?: { sellerId?: string }
 ): Promise<Application> {
   const all = await listApplications();
   const app: Application = {
@@ -41,6 +42,7 @@ export async function addApplication(
     id: `app_${randomUUID().slice(0, 8)}`,
     createdAt: new Date().toISOString(),
     status: "pending",
+    ...(options?.sellerId ? { sellerId: options.sellerId } : {}),
   };
   all.unshift(app);
   await fs.writeFile(DATA_FILE, JSON.stringify(all, null, 2), "utf-8");

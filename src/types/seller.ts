@@ -54,7 +54,27 @@ export type PaymentScreenshotCheck = {
 
 export type SellerProduct = Product;
 
+/**
+ * One seller account (email + password) can own multiple stores. Each
+ * store still has its own subscription (`plan` + `trialEndsAt`) — those
+ * are per-store, not per-seller. `sellerId` is the foreign key into
+ * `data/sellers.json`.
+ */
+export type Seller = {
+  id: string;
+  email: string;
+  passwordHash: string;
+  createdAt: string;
+};
+
+/**
+ * What we return from `getCurrentSeller()`. Never includes the password
+ * hash — that's only stored in the JSON file and only used for verification.
+ */
+export type PublicSeller = Pick<Seller, "id" | "email" | "createdAt">;
+
 export type SellerStore = Store & {
+  sellerId: string;
   plan?: "weekly" | "monthly";
   trialEndsAt?: string;
 };
