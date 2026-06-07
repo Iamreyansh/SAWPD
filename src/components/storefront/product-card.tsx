@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { useCartStore } from "@/store/cart-store";
 import { useUiStore } from "@/store/ui-store";
 import { useToast } from "@/components/ui/toaster";
@@ -17,10 +18,38 @@ export function ProductCard({ product, index }: Props) {
   const add = useCartStore((s) => s.add);
   const openProduct = useUiStore((s) => s.openProduct);
   const { toast } = useToast();
+  const reducedMotion = useReducedMotion();
+  // Tracks post-mount decisions only. Starts false so the SSR and the
+  // first client render are identical (avoids hydration mismatch), then
+  // the effect below can flip it true if reduced motion is on or after
+  // the 1.5s safety net.
+  const [skipAnimate, setSkipAnimate] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    if (reducedMotion) {
+      setSkipAnimate(true);
+      return;
+    }
+    // Safety net: if whileInView hasn't fired (slow scroller, headless
+    // scraper, very tall viewport, etc), reveal the card after 1.5s so
+    // it's never permanently invisible.
+    const t = setTimeout(() => setSkipAnimate(true), 1500);
+    return () => clearTimeout(t);
+  }, [reducedMotion]);
 
   const isLowStock = product.isAvailable && product.stockCount > 0 && product.stockCount <= 5;
   const isSoldOut = !product.isAvailable || product.stockCount === 0;
-  const isOnSale = product.tags?.includes("sale");
+  const isOnSale = product.tags?.includes("sale") ?? false;
+
+  // Render a plain <div> once we've decided to skip the animation
+  // (reduced motion, or the safety net has fired). The card is visible
+  // by default; no opacity:0 surprise for scrapers, reduced-motion
+  // users, or slow scrollers.
+  if (mounted && skipAnimate) {
+    return <div className="group">{renderCard({ product, isLowStock, isSoldOut, isOnSale, add, openProduct, toast })}</div>;
+  }
 
   return (
     <motion.div
@@ -29,7 +58,34 @@ export function ProductCard({ product, index }: Props) {
       viewport={{ once: true, margin: "-60px" }}
       transition={{ duration: 0.6, delay: (index % 4) * 0.06, ease: [0.22, 1, 0.36, 1] }}
       className="group"
+      data-animate-up={mounted ? "true" : undefined}
     >
+      {renderCard({ product, isLowStock, isSoldOut, isOnSale, add, openProduct, toast })}
+    </motion.div>
+  );
+}
+
+type RenderArgs = {
+  product: Product;
+  isLowStock: boolean;
+  isSoldOut: boolean;
+  isOnSale: boolean;
+  add: (id: string, qty: number) => void;
+  openProduct: (id: string) => void;
+  toast: (t: { title: string; description?: string }) => void;
+};
+
+function renderCard({
+  product,
+  isLowStock,
+  isSoldOut,
+  isOnSale,
+  add,
+  openProduct,
+  toast,
+}: RenderArgs) {
+  return (
+    <>
       <button
         onClick={() => {
           if (isSoldOut) return;
@@ -120,6 +176,6 @@ export function ProductCard({ product, index }: Props) {
           )}
         </div>
       </div>
-    </motion.div>
+    </>
   );
 }
