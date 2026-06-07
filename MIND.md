@@ -352,6 +352,12 @@ log entry and mark it done in PLAN.md.
   - The UI audit's "1 broken image" report is a false positive caused by lazy-loaded `next/image` + the audit's `fullPage: true` screenshot (which doesn't always trigger lazy load). After explicit scroll, the image loads (`naturalWidth: 360, complete: true`). Not a real broken image — the audit just catches anything below the fold. Documented for future audits.
   - `pnpm typecheck` + `pnpm lint` both pass. Fresh screenshots at `/tmp/sawpd-ui-shots/setC-{riya-hero,landing-shops,landing-testimonials}.png`.
 
+- **Set 19D (2026-06-07) — UX polish**
+  - **`/shops` "Coming soon" treatment** (`src/app/shops/page.tsx`): previously filtered out stores with `productCount === 0` (Earthen/Kabir), so users only saw Riya. Now renders all stores, with a "Live" section (clickable cards with full-color hero, status badge, "Visit shop" CTA) and a "Coming soon" section (grayscale image, "COMING SOON" overlay, dashed border, "Follow on Instagram" link). The "Coming soon" divider uses the existing `hairline` + `eyebrow-ink` pattern.
+  - **Settings → Hero image URL helper** (`src/components/dashboard/settings-form.tsx`): added a hint "Use a 4:5 or 5:4 portrait photo (1200×1600 or larger). Try Unsplash, your own CDN, or a product shot." Plus a live `HeroImagePreview` component that shows a 64×80 thumbnail of the current URL with "Preview · saved on submit" label. Uses `watch` to update as the user types; hides on invalid URLs, shows "No image" placeholder for empty values.
+  - **Customers page LTV column** (`src/components/dashboard/customers-client.tsx:144-149`): added `tabular-nums` to the value (rupee amounts now align column-wise), `mt-0.5` + `text-[10.5px]` + `tracking-[0.1em]` + `text-ink/45` on the LTV label (slightly larger, more breathing room, slightly less faded). Was: 10px, no top margin, no tabular-nums.
+  - `pnpm typecheck` + `pnpm lint` both pass. Verified via screenshots: `setD-shops-full.png` shows both Riya and Earthen sections; `setD-settings.png` shows the live preview; `setD-customers-after.png` shows the cleaner LTV column.
+
 ## 9. Open questions / future decisions
 
 - **Email provider**: Resend recommended. Swap point: `lib/notify.ts#deliver()`.
