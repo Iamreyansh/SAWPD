@@ -42,10 +42,10 @@ export function TrustStrip() {
                   <Icon className="h-4 w-4 text-vermillion" strokeWidth={2} />
                 </span>
                 <div>
-                  <p className="text-[13.5px] font-semibold tracking-[-0.01em] text-bone">
+                  <p className="text-[14px] font-semibold tracking-[-0.01em] text-bone">
                     {it.title}
                   </p>
-                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-bone/55">
+                  <p className="mt-2 text-[13px] leading-relaxed text-bone/60">
                     {it.body}
                   </p>
                 </div>
