@@ -367,6 +367,13 @@ log entry and mark it done in PLAN.md.
   - Refactored the card body into a `renderCard({...})` helper so both the animated and static branches share the exact same inner content.
   - `pnpm typecheck` + `pnpm lint` both pass. Verified via Puppeteer probe: normal motion t=0 → 7 animated/2 visible, t=2s → 0 animated/9 visible; reduced motion t=2s → 0 animated/9 visible. No hydration warnings on either path. Screenshot at `/tmp/sawpd-ui-shots/setE-products.png` shows the grid renders cleanly.
 
+- **Set 19F (2026-06-07) — Trust strip text size**
+  - Small bump on the dark "trust" bar so the text reads better: title 13.5px → 14px, body 12.5px → 13px (slightly less faded: 55 → 60 opacity), title→body spacing mt-1.5 → mt-2. (`src/components/landing/trust-strip.tsx:45-49`)
+  - Admin pages already had per-page titles from Set 19B (overview, login, applications, stores, stores/[slug] with `generateMetadata`). Nothing to do.
+  - `pnpm typecheck` + `pnpm lint` both pass. Screenshot at `/tmp/sawpd-ui-shots/setF-trust-strip.png` shows the improved readability.
+
+**All 6 UI fix sets (19A–19F) complete.** That's 14 issues from the 2026-06-07 audit, all fixed and pushed.
+
 ## 9. Open questions / future decisions
 
 - **Email provider**: Resend recommended. Swap point: `lib/notify.ts#deliver()`.
