@@ -1,0 +1,33 @@
+node_modules
+.next
+out
+.env*.local
+.DS_Store
+*.log
+.vercel
+next-env.d.ts
+.turbo
+
+# MVP application store — file-based, do not commit
+data/
+
+# Uploaded product images (MVP local storage)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Marketing artifacts (regenerable via scripts/render-one-pager.mjs)
+sawpd-one-pager.pdf
+
+# IDE / editor
+.vscode/
+.idea/
+.claude/
+.cursor/
+.aider*
+
+# TypeScript build cache
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# OS
+Thumbs.db

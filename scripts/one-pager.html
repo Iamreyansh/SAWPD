@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>SAWPD — One-pager</title>
+<style>
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: -apple-system, "SF Pro Text", "Inter", "Helvetica Neue", Arial, sans-serif; color: #111; -webkit-font-smoothing: antialiased; }
+  body { background: #faf9f7; }
+
+  .page {
+    width: 210mm;
+    height: 297mm;
+    padding: 18mm 18mm 16mm;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  .ink { color: #111; }
+  .muted { color: #6b6864; }
+  .vermillion { color: #ff4a1c; }
+
+  /* Top brand strip */
+  .strip {
+    position: absolute; top: 0; left: 0; right: 0; height: 6px;
+    background: linear-gradient(90deg, #ff4a1c 0%, #ff4a1c 35%, #111 35%, #111 100%);
+  }
+
+  /* Cover */
+  .cover {
+    background: #faf9f7;
+    display: flex; flex-direction: column;
+  }
+  .cover .mark {
+    display: flex; align-items: center; gap: 10px; margin-top: 6mm;
+  }
+  .cover .mark .badge {
+    width: 36px; height: 36px; border-radius: 8px; background: #111; color: #faf9f7;
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px;
+  }
+  .cover .mark .name { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
+  .cover h1 {
+    font-size: 56px; line-height: 1.02; letter-spacing: -0.035em; font-weight: 800;
+    color: #111; margin-top: 28mm; max-width: 165mm;
+  }
+  .cover h1 .accent { color: #ff4a1c; }
+  .cover .sub {
+    margin-top: 12mm; font-size: 17px; line-height: 1.45; color: #2a2926; max-width: 155mm;
+  }
+  .cover .image {
+    position: absolute; right: -10mm; bottom: 30mm; width: 130mm; height: 110mm;
+    border-radius: 18px; overflow: hidden; box-shadow: 0 30px 60px rgba(0,0,0,0.18);
+  }
+  .cover .image img { width: 100%; height: 100%; object-fit: cover; }
+  .cover .pill {
+    position: absolute; left: 18mm; bottom: 22mm;
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #111; color: #faf9f7; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase; padding: 9px 14px; border-radius: 999px;
+  }
+  .cover .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: #ff4a1c; }
+  .cover .meta {
+    position: absolute; left: 18mm; bottom: 14mm; right: 18mm;
+    display: flex; justify-content: space-between; font-size: 10.5px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: #6b6864; font-weight: 600;
+  }
+
+  /* Section header */
+  .h-eyebrow {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
+    color: #ff4a1c;
+  }
+  .h-eyebrow.ink { color: #6b6864; }
+  h2 {
+    font-size: 32px; line-height: 1.1; letter-spacing: -0.025em; font-weight: 800;
+    color: #111; margin-top: 8px; max-width: 170mm;
+  }
+  h2 .thin { font-weight: 300; color: #6b6864; }
+
+  /* Page 2 — What is SAWPD */
+  .pitch {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14mm; margin-top: 16mm;
+  }
+  .pitch .visual {
+    border-radius: 16px; overflow: hidden; height: 110mm; box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+  }
+  .pitch .visual img { width: 100%; height: 100%; object-fit: cover; }
+  .pitch .copy { display: flex; flex-direction: column; justify-content: center; }
+  .pitch .lede {
+    font-size: 22px; line-height: 1.35; color: #111; font-weight: 500; letter-spacing: -0.015em;
+  }
+  .pitch .lede b { font-weight: 700; }
+  .pitch .three { margin-top: 10mm; display: flex; flex-direction: column; gap: 8px; }
+  .pitch .three div {
+    display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: #2a2926;
+  }
+  .pitch .three div .tick {
+    width: 18px; height: 18px; border-radius: 50%; background: #ff4a1c; color: #faf9f7;
+    display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  /* Page 3 — How it works */
+  .steps {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8mm; margin-top: 14mm;
+  }
+  .step {
+    background: #fff; border-radius: 16px; padding: 12mm 8mm 10mm; border: 1px solid rgba(0,0,0,0.06);
+    display: flex; flex-direction: column; min-height: 95mm;
+  }
+  .step .num {
+    width: 36px; height: 36px; border-radius: 10px; background: #111; color: #faf9f7;
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px;
+  }
+  .step .num.alt { background: #ff4a1c; }
+  .step h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.015em; margin-top: 10mm; color: #111; }
+  .step p { font-size: 12.5px; line-height: 1.5; color: #4a4744; margin-top: 4mm; }
+  .step .art {
+    margin-top: auto; height: 22mm; border-radius: 10px; overflow: hidden;
+  }
+  .step .art img { width: 100%; height: 100%; object-fit: cover; }
+
+  /* Page 4 — Comparison */
+  .table {
+    margin-top: 14mm; border-radius: 16px; overflow: hidden; border: 1px solid rgba(0,0,0,0.08);
+  }
+  .row {
+    display: grid; grid-template-columns: 64mm 24mm 24mm 24mm 24mm; align-items: center;
+    background: #fff; border-bottom: 1px solid rgba(0,0,0,0.05); padding: 5mm 6mm;
+    font-size: 12px; color: #2a2926;
+  }
+  .row.head {
+    background: #111; color: #faf9f7; font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; padding: 4.5mm 7mm;
+  }
+  .row .cell-feat { font-weight: 600; }
+  .row .cell-feat .small { display: block; font-size: 10.5px; color: #6b6864; font-weight: 400; margin-top: 1.5mm; }
+  .row.head .cell-feat .small { color: rgba(250,249,247,0.55); }
+  .row .col { display: flex; align-items: center; justify-content: center; }
+  .pill-yes {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700;
+    color: #111; background: rgba(0,0,0,0.06); padding: 3px 9px; border-radius: 999px;
+  }
+  .pill-no {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700;
+    color: #b33200; background: rgba(255,74,28,0.10); padding: 3px 9px; border-radius: 999px;
+  }
+  .row.us { background: rgba(255,74,28,0.04); }
+  .row.us .cell-feat::before {
+    content: "S"; display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 5px; background: #ff4a1c; color: #faf9f7;
+    font-size: 10px; font-weight: 800; margin-right: 7px; vertical-align: middle;
+  }
+
+  /* Page 5 — Benefits */
+  .benefits {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; margin-top: 12mm;
+  }
+  .benefit {
+    background: #fff; border-radius: 16px; padding: 9mm 8mm 8mm;
+    display: grid; grid-template-columns: 28mm 1fr; gap: 6mm; align-items: center;
+    border: 1px solid rgba(0,0,0,0.05);
+  }
+  .benefit .art {
+    width: 28mm; height: 28mm; border-radius: 12px; overflow: hidden;
+  }
+  .benefit .art img { width: 100%; height: 100%; object-fit: cover; }
+  .benefit h3 { font-size: 16px; font-weight: 700; color: #111; letter-spacing: -0.01em; }
+  .benefit p { font-size: 12px; line-height: 1.45; color: #4a4744; margin-top: 3mm; }
+
+  /* Page 6 — Pricing */
+  .pricing {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; margin-top: 14mm;
+  }
+  .price {
+    background: #fff; border-radius: 18px; padding: 12mm 10mm 10mm;
+    border: 1px solid rgba(0,0,0,0.08); display: flex; flex-direction: column;
+  }
+  .price.featured {
+    background: #111; color: #faf9f7; border-color: #111; position: relative;
+  }
+  .price .ribbon {
+    position: absolute; top: -10px; right: 12mm; background: #ff4a1c; color: #faf9f7;
+    font-size: 10px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 5px 10px; border-radius: 999px;
+  }
+  .price h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .price .amt { font-size: 42px; font-weight: 800; letter-spacing: -0.03em; margin-top: 6mm; }
+  .price .amt .per { font-size: 13px; font-weight: 500; color: #6b6864; }
+  .price.featured .amt .per { color: rgba(250,249,247,0.6); }
+  .price .blurb { font-size: 12.5px; line-height: 1.5; color: #4a4744; margin-top: 4mm; }
+  .price.featured .blurb { color: rgba(250,249,247,0.75); }
+  .price ul { list-style: none; margin-top: 8mm; display: flex; flex-direction: column; gap: 4mm; }
+  .price ul li { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; }
+  .price ul li .dot { color: #ff4a1c; font-weight: 800; margin-top: -1px; }
+  .price.featured ul li .dot { color: #ff4a1c; }
+  .price .note {
+    margin-top: auto; padding-top: 8mm; font-size: 11px; line-height: 1.4; color: #6b6864;
+  }
+  .price.featured .note { color: rgba(250,249,247,0.55); }
+
+  /* Page 7 — CTA */
+  .cta { display: flex; flex-direction: column; }
+  .cta .top {
+    display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 14mm; margin-top: 14mm; align-items: center;
+  }
+  .cta h2 { font-size: 48px; line-height: 1.05; max-width: 100%; }
+  .cta .lede { font-size: 16px; line-height: 1.5; color: #2a2926; margin-top: 8mm; max-width: 95mm; }
+  .cta .qr {
+    background: #fff; border-radius: 18px; padding: 9mm; text-align: center; border: 1px solid rgba(0,0,0,0.08);
+  }
+  .cta .qr .label { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: #6b6864; margin-bottom: 6mm; }
+  .cta .qr .img { width: 60mm; height: 60mm; background: #faf9f7; border-radius: 10px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: center; }
+  .cta .qr .url { margin-top: 6mm; font-family: "SF Mono", "Menlo", monospace; font-size: 12px; color: #111; font-weight: 600; }
+  .cta .buttons { display: flex; gap: 5mm; margin-top: 10mm; }
+  .cta .btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 14px 22px; border-radius: 999px;
+    font-size: 14px; font-weight: 700; letter-spacing: -0.01em;
+  }
+  .cta .btn.primary { background: #ff4a1c; color: #faf9f7; }
+  .cta .btn.ghost { background: #111; color: #faf9f7; }
+  .cta .meta { margin-top: auto; display: flex; justify-content: space-between; font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: #6b6864; font-weight: 600; padding-top: 10mm; border-top: 1px solid rgba(0,0,0,0.08); }
+
+  /* Footer brand on every page (subtle) */
+  .footer-mark {
+    position: absolute; left: 18mm; bottom: 9mm; display: flex; align-items: center; gap: 6px;
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #6b6864; font-weight: 600;
+  }
+  .footer-mark .dot { width: 5px; height: 5px; border-radius: 50%; background: #ff4a1c; }
+  .page-num { position: absolute; right: 18mm; bottom: 9mm; font-size: 10px; color: #6b6864; font-weight: 600; letter-spacing: 0.16em; }
+</style>
+</head>
+<body>
+
+<!-- ========== COVER ========== -->
+<section class="page cover">
+  <div class="strip"></div>
+  <div class="mark">
+    <div class="badge">S</div>
+    <div class="name">SAWPD</div>
+  </div>
+  <h1>The shop<br/>in your <span class="accent">bio</span>.</h1>
+  <p class="sub">Sell from your Instagram in 60 seconds. Flat subscription. UPI payments. No commission, ever.</p>
+  <div class="pill"><span class="dot"></span>Now in early access</div>
+  <div class="image">
+    <img src="https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=600&q=70" alt="Small business" />
+  </div>
+  <div class="meta">
+    <span>sawpd.shop</span>
+    <span>For Instagram creators</span>
+  </div>
+</section>
+
+<!-- ========== WHAT IS SAWPD ========== -->
+<section class="page">
+  <div class="strip"></div>
+  <div class="footer-mark"><span class="dot"></span>SAWPD · 02</div>
+  <div class="page-num">02 / 07</div>
+  <p class="h-eyebrow">The product</p>
+  <h2>One link. Every order.<br/><span class="thin">Zero setup.</span></h2>
+  <div class="pitch">
+    <div class="visual">
+      <img src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=600&q=70" alt="Phone checkout" />
+    </div>
+    <div class="copy">
+      <p class="lede">SAWPD turns your Instagram bio into a <b>real shop</b> — products, UPI checkout, order tracking, returns. Live in under a minute.</p>
+      <div class="three">
+        <div><span class="tick">✓</span>Custom link at <b>sawpd.shop/s/your-handle</b></div>
+        <div><span class="tick">✓</span>UPI QR per order — your UPI ID, your money</div>
+        <div><span class="tick">✓</span>Track, verify, ship from one dashboard</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== HOW IT WORKS ========== -->
+<section class="page">
+  <div class="strip"></div>
+  <div class="footer-mark"><span class="dot"></span>SAWPD · 03</div>
+  <div class="page-num">03 / 07</div>
+  <p class="h-eyebrow">How it works</p>
+  <h2>From DMs to dispatch<br/><span class="thin">in 3 steps.</span></h2>
+  <div class="steps">
+    <div class="step">
+      <div class="num">1</div>
+      <h3>Drop your handle</h3>
+      <p>Apply with your Instagram handle. We hand-review each shop in under 48 hours.</p>
+      <div class="art"><img src="https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&w=600&q=70" alt="Apply" /></div>
+    </div>
+    <div class="step">
+      <div class="num alt">2</div>
+      <h3>Add products</h3>
+      <p>Photos, prices, stock. Drafts stay private; hit publish and your shop is live.</p>
+      <div class="art"><img src="https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=600&q=70" alt="Products" /></div>
+    </div>
+    <div class="step">
+      <div class="num">3</div>
+      <h3>Share &amp; sell</h3>
+      <p>Drop the link in your bio. Customers pay via UPI; you verify and ship.</p>
+      <div class="art"><img src="https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=600&q=70" alt="Sell" /></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== COMPARISON ========== -->
+<section class="page">
+  <div class="strip"></div>
+  <div class="footer-mark"><span class="dot"></span>SAWPD · 04</div>
+  <div class="page-num">04 / 07</div>
+  <p class="h-eyebrow">Why SAWPD</p>
+  <h2>Built for Instagram sellers.<br/><span class="thin">Not retrofitted.</span></h2>
+  <div class="table">
+    <div class="row head">
+      <div class="cell-feat">Feature</div>
+      <div class="col">SAWPD</div>
+      <div class="col">Shopify Lite</div>
+      <div class="col">linktr.ee</div>
+      <div class="col">Selar</div>
+    </div>
+    <div class="row us">
+      <div class="cell-feat">UPI QR payments<span class="small">Customer pays via any UPI app</span></div>
+      <div class="col"><span class="pill-yes">● built in</span></div>
+      <div class="col"><span class="pill-no">✕ needs app</span></div>
+      <div class="col"><span class="pill-no">✕ no</span></div>
+      <div class="col"><span class="pill-yes">● built in</span></div>
+    </div>
+    <div class="row us">
+      <div class="cell-feat">Per-sale commission<span class="small">How much we take from each order</span></div>
+      <div class="col"><span class="pill-yes">● none</span></div>
+      <div class="col"><span class="pill-no">✕ 2% + ₹0</span></div>
+      <div class="col"><span class="pill-yes">● none</span></div>
+      <div class="col"><span class="pill-no">✕ 5%</span></div>
+    </div>
+    <div class="row us">
+      <div class="cell-feat">Setup time<span class="small">From signup to first sale</span></div>
+      <div class="col"><span class="pill-yes">● 60 sec</span></div>
+      <div class="col"><span class="pill-no">✕ days</span></div>
+      <div class="col"><span class="pill-yes">● 5 min</span></div>
+      <div class="col"><span class="pill-yes">● 10 min</span></div>
+    </div>
+    <div class="row us">
+      <div class="cell-feat">Inventory &amp; order tracking<span class="small">Stock counts, status, shipping</span></div>
+      <div class="col"><span class="pill-yes">● built in</span></div>
+      <div class="col"><span class="pill-yes">● yes</span></div>
+      <div class="col"><span class="pill-no">✕ no</span></div>
+      <div class="col"><span class="pill-no">✕ basic</span></div>
+    </div>
+    <div class="row us">
+      <div class="cell-feat">Returns &amp; refunds<span class="small">Customer-initiated, seller-approved</span></div>
+      <div class="col"><span class="pill-yes">● built in</span></div>
+      <div class="col"><span class="pill-no">✕ app</span></div>
+      <div class="col"><span class="pill-no">✕ no</span></div>
+      <div class="col"><span class="pill-no">✕ no</span></div>
+    </div>
+  </div>
+  <p class="muted" style="font-size:10.5px; margin-top:6mm; line-height:1.4;">Competitor data based on publicly listed India plans, June 2026. "None" on commission means the platform does not take a cut per sale.</p>
+</section>
+
+<!-- ========== BENEFITS ========== -->
+<section class="page">
+  <div class="strip"></div>
+  <div class="footer-mark"><span class="dot"></span>SAWPD · 05</div>
+  <div class="page-num">05 / 07</div>
+  <p class="h-eyebrow">What you get</p>
+  <h2>Everything you need<br/><span class="thin">to run the shop.</span></h2>
+  <div class="benefits">
+    <div class="benefit">
+      <div class="art"><img src="https://images.unsplash.com/photo-1556742502-ec7c0e9f34b1?auto=format&fit=crop&w=600&q=70" alt="" /></div>
+      <div>
+        <h3>100% of every sale</h3>
+        <p>No commission. No transaction fee. UPI payments land directly in your account.</p>
+      </div>
+    </div>
+    <div class="benefit">
+      <div class="art"><img src="https://images.unsplash.com/photo-1556740758-90de374c12ad?auto=format&fit=crop&w=600&q=70" alt="" /></div>
+      <div>
+        <h3>UPI-native checkout</h3>
+        <p>Customer scans, pays, done. We generate the QR — your UPI ID, your bank.</p>
+      </div>
+    </div>
+    <div class="benefit">
+      <div class="art"><img src="https://images.unsplash.com/photo-1556741533-411cf82e4e2d?auto=format&fit=crop&w=600&q=70" alt="" /></div>
+      <div>
+        <h3>One dashboard</h3>
+        <p>Orders, payments, returns, promos. Verify a screenshot, mark shipped, you're done.</p>
+      </div>
+    </div>
+    <div class="benefit">
+      <div class="art"><img src="https://images.unsplash.com/photo-1556742212-5b321f3c261b?auto=format&fit=crop&w=600&q=70" alt="" /></div>
+      <div>
+        <h3>Customer track + returns</h3>
+        <p>Order ID + phone. No customer signup. Buyers see status, request returns, done.</p>
+      </div>
+    </div>
+    <div class="benefit">
+      <div class="art"><img src="https://images.unsplash.com/photo-1556742393-d75f468bfcb0?auto=format&fit=crop&w=600&q=70" alt="" /></div>
+      <div>
+        <h3>Promo codes</h3>
+        <p>Percent or flat off. Set a window, a usage cap, and watch them convert.</p>
+      </div>
+    </div>
+    <div class="benefit">
+      <div class="art"><img src="https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=600&q=70" alt="" /></div>
+      <div>
+        <h3>Hand-reviewed onboarding</h3>
+        <p>Every shop is checked by a human. We say no to spam, yes to real sellers.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== PRICING ========== -->
+<section class="page">
+  <div class="strip"></div>
+  <div class="footer-mark"><span class="dot"></span>SAWPD · 06</div>
+  <div class="page-num">06 / 07</div>
+  <p class="h-eyebrow">Pricing</p>
+  <h2>One flat fee.<br/><span class="thin">Stay only if it works.</span></h2>
+  <div class="pricing">
+    <div class="price">
+      <h3>Pay-as-you-go</h3>
+      <div class="amt">₹499 <span class="per">/ week</span></div>
+      <p class="blurb">For new shops and seasonal drops. No contract, cancel anytime.</p>
+      <ul>
+        <li><span class="dot">●</span>Up to 50 orders / week</li>
+        <li><span class="dot">●</span>Custom domain support</li>
+        <li><span class="dot">●</span>Promo codes &amp; discounts</li>
+        <li><span class="dot">●</span>Customer tracking + returns</li>
+      </ul>
+      <p class="note">No card required during early access. Activate free, bill later.</p>
+    </div>
+    <div class="price featured">
+      <span class="ribbon">Most popular</span>
+      <h3>Monthly</h3>
+      <div class="amt">₹1,499 <span class="per">/ month</span></div>
+      <p class="blurb">For sellers with regular volume. Save 25% vs weekly.</p>
+      <ul>
+        <li><span class="dot">●</span>Unlimited orders</li>
+        <li><span class="dot">●</span>Priority support</li>
+        <li><span class="dot">●</span>Promo codes &amp; CSV exports</li>
+        <li><span class="dot">●</span>Customer tracking + returns</li>
+      </ul>
+      <p class="note">No card required during early access. Activate free, bill later.</p>
+    </div>
+  </div>
+  <p class="muted" style="font-size:11px; margin-top:8mm; text-align:center; line-height:1.5;">All prices exclusive of GST. Subscription is for the storefront — UPI payments are made direct to your account, not through us.</p>
+</section>
+
+<!-- ========== CTA ========== -->
+<section class="page cta">
+  <div class="strip"></div>
+  <div class="footer-mark"><span class="dot"></span>SAWPD · 07</div>
+  <div class="page-num">07 / 07</div>
+  <p class="h-eyebrow">Get started</p>
+  <h2>Open your shop<br/>in 60 seconds.</h2>
+  <div class="top">
+    <div>
+      <p class="lede">Apply with your Instagram handle. We'll hand-review and have you live in under 48 hours. No card needed during early access.</p>
+      <div class="buttons">
+        <a class="btn primary" href="https://sawpd.shop/apply">Apply now →</a>
+        <a class="btn ghost" href="https://sawpd.shop/s/riya">See demo shop</a>
+      </div>
+    </div>
+    <div class="qr">
+      <div class="label">Scan to apply</div>
+      <div class="img">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://sawpd.shop/apply" alt="QR" style="width:100%;height:100%;border-radius:6px;" />
+      </div>
+      <div class="url">sawpd.shop/apply</div>
+    </div>
+  </div>
+  <div class="meta">
+    <span>sawpd.shop</span>
+    <span>© SAWPD 2026</span>
+  </div>
+</section>
+
+</body>
+</html>

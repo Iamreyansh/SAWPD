@@ -1,0 +1,161 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bone: 250 249 247;
+    --bone-strong: 245 242 236;
+    --ink: 17 17 17;
+    --vermillion: 255 74 28;
+    --vermillion-deep: 220 50 12;
+    --muted: 138 133 124;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-bone text-ink antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  /* Native-feel inputs on iOS */
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  /* Selection accent */
+  ::selection {
+    background: rgba(255, 74, 28, 0.18);
+    color: rgb(17, 17, 17);
+  }
+
+  /* Thin editorial scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(17, 17, 17, 0.12);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(17, 17, 17, 0.2);
+  }
+
+  /* Remove number input spinners */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+}
+
+@layer components {
+  .display-xl {
+    @apply font-extrabold leading-[0.88] tracking-[-0.045em];
+    font-size: clamp(3rem, 9vw, 7.5rem);
+  }
+  .display-l {
+    @apply font-extrabold leading-[0.92] tracking-[-0.04em];
+    font-size: clamp(2.25rem, 6vw, 4.5rem);
+  }
+  .display-m {
+    @apply font-bold leading-[1.05] tracking-[-0.03em];
+    font-size: clamp(1.5rem, 2.4vw, 2rem);
+  }
+  .display-s {
+    @apply font-bold leading-tight tracking-[-0.02em];
+    font-size: 1.125rem;
+  }
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-vermillion;
+  }
+  .eyebrow-ink {
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/60;
+  }
+  .hairline {
+    @apply h-px w-full bg-ink/10;
+  }
+  .container-editorial {
+    @apply mx-auto w-full max-w-[1200px] px-5 md:px-10;
+  }
+  .ink-underline {
+    @apply relative after:absolute after:bottom-0 after:left-0 after:h-px after:w-full after:origin-right after:scale-x-0 after:bg-ink after:transition-transform after:duration-500 after:ease-out hover:after:origin-left hover:after:scale-x-100;
+  }
+  /* Modern surface tokens */
+  .surface-card {
+    @apply rounded-2xl border border-ink/[0.06] bg-bone shadow-[0_1px_2px_rgba(17,17,17,0.04),0_0_0_1px_rgba(17,17,17,0.02)] transition-all duration-200;
+  }
+  .surface-card-hover {
+    @apply hover:border-ink/[0.1] hover:shadow-[0_4px_18px_-2px_rgba(17,17,17,0.08),0_0_0_1px_rgba(17,17,17,0.03)];
+  }
+  .surface-inset {
+    @apply rounded-2xl border border-ink/[0.06] bg-bone-strong;
+  }
+  .surface-glass {
+    @apply rounded-2xl border border-ink/[0.06] bg-bone/70 backdrop-blur-md backdrop-saturate-150;
+  }
+  .ring-focus {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vermillion/40 focus-visible:ring-offset-2 focus-visible:ring-offset-bone;
+  }
+  /* Subtle row hover for list surfaces */
+  .row-hover {
+    @apply transition-colors duration-150 hover:bg-ink/[0.02];
+  }
+  /* Dot/divider helpers */
+  .dot-sep::before {
+    content: "·";
+    @apply mx-2 text-ink/30;
+  }
+}
+
+@layer utilities {
+  .mask-fade-b {
+    -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  /* Subtle dotted background for hero / sign-up moments */
+  .bg-dots {
+    background-image: radial-gradient(rgba(17, 17, 17, 0.08) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+  .bg-grid {
+    background-image:
+      linear-gradient(rgba(17, 17, 17, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(17, 17, 17, 0.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
