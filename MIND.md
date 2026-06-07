@@ -332,6 +332,19 @@ log entry and mark it done in PLAN.md.
   - **UI audit infrastructure.** New `scripts/ui-crawl.mjs` crawls all 19 routes (public + admin + dashboard), captures console errors, network failures, broken images, missing alt text, horizontal overflow, page titles, meta descriptions, and saves full-page screenshots to `/tmp/sawpd-ui-shots/`. New `scripts/ui-deep-dive.mjs` does scroll-to-trigger and interaction tests (e.g. hovers a product card, counts shops, rechecks admin login for the env var leak). Both are reusable for future audits.
   - `pnpm typecheck` + `pnpm lint` both pass.
 
+- **Set 19B (2026-06-07) — Per-page metadata**
+  - 7 pages were missing per-page metadata and fell through to the marketing default ("SAWPD — The shop in your bio"):
+    - `/apply` (no metadata)
+    - `/s/[slug]/checkout` (no metadata; uses `generateMetadata` to read the store name)
+    - `/dashboard/promotions` (no metadata)
+    - `/dashboard/customers` (no metadata)
+    - `/dashboard/orders/[id]` (no metadata; uses `generateMetadata` with the order id)
+    - `/dashboard/returns` (had title, no description)
+    - `/admin/stores/[slug]` (had a static title, no description; switched to `generateMetadata`)
+  - All 7 now have a unique, contextual `<title>` and a `<meta description>`. Dynamic pages use `generateMetadata` (no extra data calls — same store/order lookups the page already does).
+  - Verified via curl: 7/7 pages serve the expected title and description.
+  - `pnpm typecheck` + `pnpm lint` both pass.
+
 ## 9. Open questions / future decisions
 
 - **Email provider**: Resend recommended. Swap point: `lib/notify.ts#deliver()`.

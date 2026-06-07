@@ -71,7 +71,7 @@ export function Hero({ kicker, headline, sub, imageUrl, imageAlt }: HeroProps) {
               {kicker}
             </motion.div>
 
-            <h1 className="display-xl text-ink">
+            <h1 className="display-l text-ink">
               {headline.map((line, i) => (
                 <span key={i} className="block overflow-hidden">
                   <motion.span
