@@ -12,10 +12,10 @@ const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const ACTIVE_STORE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 
 function getSecret(): string {
-  const secret = process.env.ADMIN_SECRET;
+  const secret = process.env.SELLER_SECRET;
   if (!secret || secret.length < 8) {
     throw new Error(
-      "ADMIN_SECRET env var is required (min 8 chars). Reused as the seller cookie HMAC key for now — replace with a SELLER_SECRET in v1.1.",
+      "SELLER_SECRET env var is required (min 8 chars). Used to sign seller session cookies.",
     );
   }
   return secret;
