@@ -42,11 +42,17 @@ export async function findSellerById(id: string): Promise<Seller | null> {
   const sb = createAdminClient();
   const { data, error } = await sb
     .from("sellers")
-    .select("*")
+    .select("id, email, created_at")
     .eq("id", id)
     .single();
   if (error || !data) return null;
-  return rowToSeller(data);
+  // Password hash not needed for session lookups
+  return {
+    id: data.id as string,
+    email: data.email as string,
+    passwordHash: "",
+    createdAt: data.created_at as string,
+  };
 }
 
 export type CreateSellerInput = {

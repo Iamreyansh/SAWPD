@@ -7,6 +7,7 @@ import {
   checkPassword,
   clearAdminSession,
   createAdminSession,
+  isAdmin,
 } from "@/lib/admin-auth";
 import { decideApplication, getApplication } from "@/lib/applications";
 import { notifyApplicationDecided } from "@/lib/notify";
@@ -18,6 +19,10 @@ import { listProductsForStore } from "@/lib/products";
 import { loginLimiter } from "@/lib/rate-limit";
 import { loginProtection } from "@/lib/brute-force";
 import { getClientIp } from "@/lib/get-ip";
+
+async function requireAdmin(): Promise<boolean> {
+  return isAdmin();
+}
 
 export type LoginResult = { ok: true } | { ok: false; error: string };
 
@@ -70,6 +75,9 @@ export type DecisionResult =
   | { ok: false; error: string };
 
 export async function decideAction(input: unknown): Promise<DecisionResult> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: "Unauthorized." };
+  }
   const parsed = decisionSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Invalid input." };
@@ -169,6 +177,9 @@ export type EmailApplicantResult =
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
 export async function emailApplicantAction(input: unknown): Promise<EmailApplicantResult> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: "Unauthorized." };
+  }
   const parsed = emailApplicantSchema.safeParse(input);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
@@ -207,6 +218,9 @@ const suspendSchema = z.object({
 export type SuspendResult = { ok: true } | { ok: false; error: string };
 
 export async function suspendStoreAction(input: unknown): Promise<SuspendResult> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: "Unauthorized." };
+  }
   const parsed = suspendSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input." };
   const store = await getStore(parsed.data.storeSlug);
@@ -226,6 +240,9 @@ export async function suspendStoreAction(input: unknown): Promise<SuspendResult>
 }
 
 export async function reactivateStoreAction(input: unknown): Promise<SuspendResult> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: "Unauthorized." };
+  }
   const parsed = suspendSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input." };
   const store = await getStore(parsed.data.storeSlug);
@@ -251,6 +268,9 @@ const planChangeSchema = z.object({
 export type ChangePlanResult = { ok: true } | { ok: false; error: string };
 
 export async function changeStorePlanAction(input: unknown): Promise<ChangePlanResult> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: "Unauthorized." };
+  }
   const parsed = planChangeSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input." };
   const store = await getStore(parsed.data.storeSlug);
@@ -278,6 +298,9 @@ export async function changeStorePlanAction(input: unknown): Promise<ChangePlanR
 export type ForceLowStockResult = { ok: true; count: number } | { ok: false; error: string };
 
 export async function adminForceLowStockAction(storeSlug: string): Promise<ForceLowStockResult> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: "Unauthorized." };
+  }
   const store = await getStore(storeSlug);
   if (!store) return { ok: false, error: "Store not found." };
   const products = await listProductsForStore(storeSlug);

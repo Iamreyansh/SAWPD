@@ -7,6 +7,7 @@ import { notifyApplicationReceived } from "@/lib/notify";
 import type { ApplicationInput } from "@/types/applications";
 import { formLimiter } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/get-ip";
+import { requireCaptcha } from "@/lib/captcha";
 
 const applySchema = z.object({
   fullName: z.string().min(2, "Please enter your full name"),
@@ -39,6 +40,7 @@ const applySchema = z.object({
   motivation: z
     .string()
     .min(20, "A little more — at least 20 characters"),
+  captchaToken: z.string().optional().or(z.literal("")),
 });
 
 export type ApplyResult =
@@ -68,6 +70,10 @@ export async function submitApplication(
       fieldErrors,
     };
   }
+
+  // CAPTCHA verification
+  const captchaError = await requireCaptcha(parsed.data.captchaToken);
+  if (captchaError) return { ok: false, error: captchaError };
 
   // If the applicant is signed in, attach their sellerId so the admin
   // approval flow can hand the resulting store back to the same account.

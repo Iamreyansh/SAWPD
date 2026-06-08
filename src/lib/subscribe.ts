@@ -5,6 +5,8 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { notifySubscriberAdded } from "@/lib/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { formLimiter } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/get-ip";
 
 const emailSchema = z.string().email("Enter a valid email");
 
@@ -22,6 +24,11 @@ export type SubscribeResult =
 export async function subscribeEmail(
   formData: FormData
 ): Promise<SubscribeResult> {
+  const ip = await getClientIp();
+  if (!formLimiter.check(`subscribe:${ip}`)) {
+    return { ok: false, error: "Too many signups. Please wait a moment." };
+  }
+
   const raw = String(formData.get("email") ?? "").trim().toLowerCase();
   const parsed = emailSchema.safeParse(raw);
   if (!parsed.success) {

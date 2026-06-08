@@ -14,8 +14,10 @@ import { getStoreForSeller } from "@/lib/store";
 import { loginLimiter, formLimiter } from "@/lib/rate-limit";
 import { loginProtection } from "@/lib/brute-force";
 import { getClientIp } from "@/lib/get-ip";
+import { requireCaptcha } from "@/lib/captcha";
+import { checkPasswordStrength } from "@/lib/password";
 
-const schema = z.object({
+const baseSchema = z.object({
   email: z
     .string()
     .min(1, "Enter your email")
@@ -23,7 +25,14 @@ const schema = z.object({
     .transform(normalizeEmail),
   password: z
     .string()
-    .min(8, "At least 8 characters"),
+    .min(8, "At least 8 characters")
+    .max(128, "Under 128 characters"),
+});
+
+const loginSchema = baseSchema;
+
+const signupSchema = baseSchema.extend({
+  captchaToken: z.string().optional().or(z.literal("")),
 });
 
 export type SellerAuthResult =
@@ -36,7 +45,7 @@ export async function sellerSignupAction(input: unknown): Promise<SellerAuthResu
     return { ok: false, error: "Too many signups. Please wait a moment." };
   }
 
-  const parsed = schema.safeParse(input);
+  const parsed = signupSchema.safeParse(input);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
     for (const issue of parsed.error.issues) {
@@ -51,6 +60,21 @@ export async function sellerSignupAction(input: unknown): Promise<SellerAuthResu
       fieldErrors,
     };
   }
+
+  // CAPTCHA verification
+  const captchaError = await requireCaptcha(parsed.data.captchaToken);
+  if (captchaError) return { ok: false, error: captchaError };
+
+  // Password strength check
+  const { strength, errors } = checkPasswordStrength(parsed.data.password);
+  if (strength === "weak") {
+    return {
+      ok: false,
+      error: "Password is too weak.",
+      fieldErrors: { password: errors[0] },
+    };
+  }
+
   const result = await createSeller(parsed.data);
   if (!result.ok) {
     if (result.error === "email_taken") {
@@ -84,7 +108,7 @@ export async function sellerLoginAction(input: unknown): Promise<SellerAuthResul
     return { ok: false, error: `Account locked. Try again in ${lockMin} min.` };
   }
 
-  const parsed = schema.safeParse(input);
+  const parsed = loginSchema.safeParse(input);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
     for (const issue of parsed.error.issues) {

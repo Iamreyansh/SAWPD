@@ -10,6 +10,7 @@ import { notifyOrderPlaced } from "@/lib/notify";
 import type { OrderLine } from "@/types/seller";
 import { checkoutLimiter } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/get-ip";
+import { requireCaptcha } from "@/lib/captcha";
 
 const customerSchema = z.object({
   name: z.string().min(2),
@@ -33,6 +34,7 @@ const placeOrderSchema = z.object({
   subtotal: z.number().int().min(0),
   promoCode: z.string().optional().or(z.literal("")),
   screenshotDataUrl: z.string().optional().or(z.literal("")),
+  captchaToken: z.string().optional().or(z.literal("")),
 });
 
 export type PlaceOrderInput = z.infer<typeof placeOrderSchema>;
@@ -74,6 +76,11 @@ export async function placeOrder(
   if (!parsed.success) {
     return { ok: false, error: "Invalid order data." };
   }
+
+  // CAPTCHA verification
+  const captchaError = await requireCaptcha(parsed.data.captchaToken);
+  if (captchaError) return { ok: false, error: captchaError };
+
   const data = parsed.data;
 
   const store = await getStore(data.storeSlug);
