@@ -50,42 +50,45 @@ export type ApplyResult =
 export async function submitApplication(
   input: unknown
 ): Promise<ApplyResult> {
-  const ip = await getClientIp();
-  if (!formLimiter.check(`apply:${ip}`)) {
-    return { ok: false, error: "Too many submissions. Please wait a moment and try again." };
-  }
-
-  const parsed = applySchema.safeParse(input);
-  if (!parsed.success) {
-    const fieldErrors: Record<string, string> = {};
-    for (const issue of parsed.error.issues) {
-      const key = issue.path[0];
-      if (typeof key === "string" && !fieldErrors[key]) {
-        fieldErrors[key] = issue.message;
-      }
+  try {
+    const ip = await getClientIp();
+    if (!formLimiter.check(`apply:${ip}`)) {
+      return { ok: false, error: "Too many submissions. Please wait a moment and try again." };
     }
-    return {
-      ok: false,
-      error: "Please fix the highlighted fields.",
-      fieldErrors,
-    };
+
+    const parsed = applySchema.safeParse(input);
+    if (!parsed.success) {
+      const fieldErrors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0];
+        if (typeof key === "string" && !fieldErrors[key]) {
+          fieldErrors[key] = issue.message;
+        }
+      }
+      return {
+        ok: false,
+        error: "Please fix the highlighted fields.",
+        fieldErrors,
+      };
+    }
+
+    // CAPTCHA verification
+    const captchaError = await requireCaptcha(parsed.data.captchaToken);
+    if (captchaError) return { ok: false, error: captchaError };
+
+    const seller = await getCurrentSeller();
+    const app = await addApplication(parsed.data as ApplicationInput, {
+      sellerId: seller?.id,
+    });
+    await notifyApplicationReceived({
+      storeName: app.storeName,
+      applicantName: app.fullName,
+      email: app.email,
+      instagramHandle: app.instagramHandle,
+    });
+    return { ok: true, id: app.id };
+  } catch (err) {
+    console.error("[submitApplication] unexpected error:", err);
+    return { ok: false, error: "Something went wrong. Please try again." };
   }
-
-  // CAPTCHA verification
-  const captchaError = await requireCaptcha(parsed.data.captchaToken);
-  if (captchaError) return { ok: false, error: captchaError };
-
-  // If the applicant is signed in, attach their sellerId so the admin
-  // approval flow can hand the resulting store back to the same account.
-  const seller = await getCurrentSeller();
-  const app = await addApplication(parsed.data as ApplicationInput, {
-    sellerId: seller?.id,
-  });
-  await notifyApplicationReceived({
-    storeName: app.storeName,
-    applicantName: app.fullName,
-    email: app.email,
-    instagramHandle: app.instagramHandle,
-  });
-  return { ok: true, id: app.id };
 }

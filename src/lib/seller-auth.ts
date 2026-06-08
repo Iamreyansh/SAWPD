@@ -53,7 +53,13 @@ export async function getCurrentSeller(): Promise<PublicSeller | null> {
   if (parts.length !== 3) return null;
   const [version, sellerId, sig] = parts;
   if (version !== SESSION_VERSION || !sellerId || !sig) return null;
-  const expected = sign(`${version}.${sellerId}`, getSecret());
+  let secret: string;
+  try {
+    secret = getSecret();
+  } catch {
+    return null;
+  }
+  const expected = sign(`${version}.${sellerId}`, secret);
   if (sig.length !== expected.length) return null;
   try {
     if (!timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(expected, "hex"))) {
