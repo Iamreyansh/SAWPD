@@ -16,6 +16,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { submitApplication, type ApplyResult } from "./actions";
+import {
+  sellerSignupAction,
+  type SellerAuthResult,
+} from "@/app/seller/actions";
 import type { Niche, SalesCadence } from "@/types/applications";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +59,8 @@ const STEPS = [
 ] as const;
 
 type FormState = {
+  accountEmail: string;
+  accountPassword: string;
   fullName: string;
   instagramHandle: string;
   email: string;
@@ -75,6 +81,8 @@ type FormState = {
 const DRAFT_KEY = "sawpd.applyDraft.v1";
 
 const initialState: FormState = {
+  accountEmail: "",
+  accountPassword: "",
   fullName: "",
   instagramHandle: "",
   email: "",
@@ -105,7 +113,6 @@ function loadDraft(): FormState {
 }
 
 export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
-  void signedIn;
   const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -114,6 +121,10 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormState>(initialState);
   const [hydrated, setHydrated] = useState(false);
+
+  const steps = signedIn
+    ? [...STEPS]
+    : [{ id: -1, title: "Account", description: "Create a free seller account — it takes 10 seconds." }, ...STEPS];
 
   useEffect(() => {
     setForm(loadDraft());
@@ -135,31 +146,34 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
 
   function validateStep(idx: number): string[] {
     const e: Record<string, string> = {};
-    if (idx === 0) {
-      if (form.fullName.trim().length < 2) e.fullName = "Required";
-      if (!form.instagramHandle.trim()) e.instagramHandle = "Required";
-      if (!/^\S+@\S+\.\S+$/.test(form.email)) e.email = "Enter a valid email";
-      if (form.phone.replace(/\D/g, "").length < 10) e.phone = "Min 10 digits";
-    } else if (idx === 1) {
-      if (form.storeName.trim().length < 2) e.storeName = "Required";
-      if (!form.niche) e.niche = "Pick one";
-      if (form.followerCount && Number(form.followerCount) < 0)
-        e.followerCount = "Cannot be negative";
-      if (
-        form.averageOrderValue &&
-        Number(form.averageOrderValue) < 0
-      )
-        e.averageOrderValue = "Cannot be negative";
-    } else if (idx === 2) {
-      if (form.salesCount && Number(form.salesCount) < 0)
-        e.salesCount = "Cannot be negative";
-      if (form.currentSetup.trim().length < 2) e.currentSetup = "Tell us briefly";
-      if (form.websiteUrl && !/^https?:\/\//.test(form.websiteUrl))
-        e.websiteUrl = "Use a full URL (https://...)";
-    } else if (idx === 3) {
-      if (form.topProducts.trim().length < 8) e.topProducts = "List your top pieces";
-      if (form.motivation.trim().length < 12) e.motivation = "Tell us a bit more";
-      if (!form.referralSource) e.referralSource = "Pick one";
+    if (!signedIn && idx === 0) {
+      if (!/^\S+@\S+\.\S+$/.test(form.accountEmail)) e.accountEmail = "Enter a valid email";
+      if (form.accountPassword.length < 8) e.accountPassword = "At least 8 characters";
+    } else {
+      const formIdx = signedIn ? idx : idx - 1;
+      if (formIdx === 0) {
+        if (form.fullName.trim().length < 2) e.fullName = "Required";
+        if (!form.instagramHandle.trim()) e.instagramHandle = "Required";
+        if (!/^\S+@\S+\.\S+$/.test(form.email)) e.email = "Enter a valid email";
+        if (form.phone.replace(/\D/g, "").length < 10) e.phone = "Min 10 digits";
+      } else if (formIdx === 1) {
+        if (form.storeName.trim().length < 2) e.storeName = "Required";
+        if (!form.niche) e.niche = "Pick one";
+        if (form.followerCount && Number(form.followerCount) < 0)
+          e.followerCount = "Cannot be negative";
+        if (form.averageOrderValue && Number(form.averageOrderValue) < 0)
+          e.averageOrderValue = "Cannot be negative";
+      } else if (formIdx === 2) {
+        if (form.salesCount && Number(form.salesCount) < 0)
+          e.salesCount = "Cannot be negative";
+        if (form.currentSetup.trim().length < 2) e.currentSetup = "Tell us briefly";
+        if (form.websiteUrl && !/^https?:\/\//.test(form.websiteUrl))
+          e.websiteUrl = "Use a full URL (https://...)";
+      } else if (formIdx === 3) {
+        if (form.topProducts.trim().length < 8) e.topProducts = "List your top pieces";
+        if (form.motivation.trim().length < 12) e.motivation = "Tell us a bit more";
+        if (!form.referralSource) e.referralSource = "Pick one";
+      }
     }
     setFieldErrors(e);
     return Object.keys(e);
@@ -167,7 +181,32 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
 
   function next() {
     if (validateStep(step).length > 0) return;
-    if (step < STEPS.length - 1) {
+    if (!signedIn && step === 0) {
+      setError(null);
+      startTransition(async () => {
+        const result: SellerAuthResult = await sellerSignupAction({
+          email: form.accountEmail.trim(),
+          password: form.accountPassword,
+        });
+        if (result.ok) {
+          setStep(step + 1);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else {
+          setError(result.error);
+          if (result.fieldErrors) {
+            const mapped: Record<string, string> = {};
+            for (const [k, v] of Object.entries(result.fieldErrors)) {
+              if (k === "email") mapped.accountEmail = v;
+              else if (k === "password") mapped.accountPassword = v;
+              else mapped[k] = v;
+            }
+            setFieldErrors(mapped);
+          }
+        }
+      });
+      return;
+    }
+    if (step < steps.length - 1) {
       setStep(step + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
@@ -235,7 +274,7 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
     );
   }
 
-  const progress = ((step + 1) / STEPS.length) * 100;
+  const progress = ((step + 1) / steps.length) * 100;
 
   return (
     <main className="container-editorial pb-24 pt-10 md:pt-16">
@@ -252,7 +291,7 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
         <div className="mt-10">
           <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/55">
             <span>
-              Step {step + 1} of {STEPS.length} · {STEPS[step].title}
+              Step {step + 1} of {steps.length} · {steps[step].title}
             </span>
             <span className="tabular-nums text-ink/40">
               {Math.round(progress)}%
@@ -266,10 +305,10 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             />
           </div>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[11.5px] text-ink/55">
-            {STEPS.map((s) => {
-              const isDone = step > s.id;
-              const isCurrent = step === s.id;
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[11.5px] text-ink/55">
+            {steps.map((s, i) => {
+              const isDone = step > i;
+              const isCurrent = step === i;
               return (
                 <span
                   key={s.id}
@@ -306,15 +345,51 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
             className="mt-8"
           >
             <h2 className="text-[20px] font-semibold tracking-[-0.01em] text-ink">
-              {STEPS[step].title}
+              {steps[step].title}
             </h2>
             <p className="mt-1 text-[13.5px] text-ink/55">
-              {STEPS[step].description}
+              {steps[step].description}
             </p>
 
             <div className="mt-6 space-y-5">
-              {step === 0 && (
+              {!signedIn && step === 0 && (
                 <>
+                  <p className="text-[13.5px] text-ink/55">
+                    This links your application to your seller dashboard. Takes 10 seconds.
+                  </p>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Field label="Email" error={fieldErrors.accountEmail}>
+                      <Input
+                        type="email"
+                        value={form.accountEmail}
+                        onChange={(e) => patch("accountEmail", e.target.value)}
+                        placeholder="you@example.com"
+                        autoComplete="email"
+                      />
+                    </Field>
+                    <Field label="Password" error={fieldErrors.accountPassword}>
+                      <Input
+                        type="password"
+                        value={form.accountPassword}
+                        onChange={(e) => patch("accountPassword", e.target.value)}
+                        placeholder="At least 8 characters"
+                        autoComplete="new-password"
+                        minLength={8}
+                      />
+                    </Field>
+                  </div>
+                  <p className="text-[12px] text-ink/45">
+                    Already have an account?{" "}
+                    <Link href="/seller/login" className="font-semibold text-vermillion hover:underline">
+                      Log in instead
+                    </Link>
+                  </p>
+                </>
+              )}
+
+              {(() => {
+                const formStep = signedIn ? step : step - 1;
+                if (formStep === 0) return (
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <Field label="Full name" error={fieldErrors.fullName}>
                       <Input
@@ -353,11 +428,8 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
                       />
                     </Field>
                   </div>
-                </>
-              )}
-
-              {step === 1 && (
-                <>
+                );
+                if (formStep === 1) return (
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <Field label="Shop name" error={fieldErrors.storeName}>
                       <Input
@@ -404,112 +476,111 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
                       />
                     </Field>
                   </div>
-                </>
-              )}
-
-              {step === 2 && (
-                <>
-                  <div>
-                    <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/60">
-                      How many orders do you currently do?
-                    </span>
-                    <div className="grid grid-cols-3 gap-2 rounded-xl border border-ink/10 bg-bone p-1">
-                      {cadences.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => patch("salesCadence", c.id)}
-                          className={
-                            "h-10 rounded-lg text-[13px] font-semibold transition-colors " +
-                            (form.salesCadence === c.id
-                              ? "bg-ink text-bone"
-                              : "text-ink/60 hover:text-ink")
-                          }
+                );
+                if (formStep === 2) return (
+                  <>
+                    <div>
+                      <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/60">
+                        How many orders do you currently do?
+                      </span>
+                      <div className="grid grid-cols-3 gap-2 rounded-xl border border-ink/10 bg-bone p-1">
+                        {cadences.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => patch("salesCadence", c.id)}
+                            className={
+                              "h-10 rounded-lg text-[13px] font-semibold transition-colors " +
+                              (form.salesCadence === c.id
+                                ? "bg-ink text-bone"
+                                : "text-ink/60 hover:text-ink")
+                            }
+                          >
+                            {c.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="mt-4">
+                        <Field
+                          label="Number"
+                          error={fieldErrors.salesCount}
+                          hint="Approximate is fine."
                         >
-                          {c.label}
-                        </button>
-                      ))}
+                          <Input
+                            type="number"
+                            inputMode="numeric"
+                            value={form.salesCount}
+                            onChange={(e) => patch("salesCount", e.target.value)}
+                            placeholder="e.g. 12"
+                            min={0}
+                          />
+                        </Field>
+                      </div>
                     </div>
-                    <div className="mt-4">
-                      <Field
-                        label="Number"
-                        error={fieldErrors.salesCount}
-                        hint="Approximate is fine."
-                      >
-                        <Input
-                          type="number"
-                          inputMode="numeric"
-                          value={form.salesCount}
-                          onChange={(e) => patch("salesCount", e.target.value)}
-                          placeholder="e.g. 12"
-                          min={0}
-                        />
-                      </Field>
-                    </div>
-                  </div>
-                  <Field
-                    label="How do you sell today?"
-                    error={fieldErrors.currentSetup}
-                    hint="e.g. DMs only, WhatsApp catalog, Shopify, etc."
-                  >
-                    <Textarea
-                      value={form.currentSetup}
-                      onChange={(e) => patch("currentSetup", e.target.value)}
-                      placeholder="Today I sell via DMs and WhatsApp. I ship from Bangalore."
-                    />
-                  </Field>
-                  <Field
-                    label="Website (optional)"
-                    error={fieldErrors.websiteUrl}
-                    hint="If you have one — Instagram-only is totally fine."
-                  >
-                    <Input
-                      value={form.websiteUrl}
-                      onChange={(e) => patch("websiteUrl", e.target.value)}
-                      type="url"
-                      placeholder="https://"
-                    />
-                  </Field>
-                </>
-              )}
-
-              {step === 3 && (
-                <>
-                  <Field
-                    label="Your top 3 best-sellers"
-                    error={fieldErrors.topProducts}
-                    hint="The single most important field. List 3 products and roughly what they sell for."
-                  >
-                    <Textarea
-                      value={form.topProducts}
-                      onChange={(e) => patch("topProducts", e.target.value)}
-                      placeholder="1. Linen camp shirt — ₹1,899 · 2. Pleated trouser — ₹2,299 · 3. Canvas tote — ₹899"
-                    />
-                  </Field>
-                  <Field
-                    label="Why do you want to join SAWPD?"
-                    error={fieldErrors.motivation}
-                    hint="One short paragraph. What problem are we solving for you?"
-                  >
-                    <Textarea
-                      value={form.motivation}
-                      onChange={(e) => patch("motivation", e.target.value)}
-                      placeholder="I lose sales in DMs because people ghost. A real checkout link would help me convert."
-                    />
-                  </Field>
-                  <Field
-                    label="How did you hear about us?"
-                    error={fieldErrors.referralSource}
-                  >
-                    <Select
-                      value={form.referralSource}
-                      onChange={(v) => patch("referralSource", v)}
-                      options={referralSources.map((s) => ({ id: s, label: s }))}
-                      placeholder="Choose one"
-                    />
-                  </Field>
-                </>
-              )}
+                    <Field
+                      label="How do you sell today?"
+                      error={fieldErrors.currentSetup}
+                      hint="e.g. DMs only, WhatsApp catalog, Shopify, etc."
+                    >
+                      <Textarea
+                        value={form.currentSetup}
+                        onChange={(e) => patch("currentSetup", e.target.value)}
+                        placeholder="Today I sell via DMs and WhatsApp. I ship from Bangalore."
+                      />
+                    </Field>
+                    <Field
+                      label="Website (optional)"
+                      error={fieldErrors.websiteUrl}
+                      hint="If you have one — Instagram-only is totally fine."
+                    >
+                      <Input
+                        value={form.websiteUrl}
+                        onChange={(e) => patch("websiteUrl", e.target.value)}
+                        type="url"
+                        placeholder="https://"
+                      />
+                    </Field>
+                  </>
+                );
+                if (formStep === 3) return (
+                  <>
+                    <Field
+                      label="Your top 3 best-sellers"
+                      error={fieldErrors.topProducts}
+                      hint="The single most important field. List 3 products and roughly what they sell for."
+                    >
+                      <Textarea
+                        value={form.topProducts}
+                        onChange={(e) => patch("topProducts", e.target.value)}
+                        placeholder="1. Linen camp shirt — ₹1,899 · 2. Pleated trouser — ₹2,299 · 3. Canvas tote — ₹899"
+                      />
+                    </Field>
+                    <Field
+                      label="Why do you want to join SAWPD?"
+                      error={fieldErrors.motivation}
+                      hint="One short paragraph. What problem are we solving for you?"
+                    >
+                      <Textarea
+                        value={form.motivation}
+                        onChange={(e) => patch("motivation", e.target.value)}
+                        placeholder="I lose sales in DMs because people ghost. A real checkout link would help me convert."
+                      />
+                    </Field>
+                    <Field
+                      label="How did you hear about us?"
+                      error={fieldErrors.referralSource}
+                    >
+                      <Select
+                        value={form.referralSource}
+                        onChange={(v) => patch("referralSource", v)}
+                        options={referralSources.map((s) => ({ id: s, label: s }))}
+                        placeholder="Choose one"
+                      />
+                    </Field>
+                  </>
+                );
+                return null;
+              })()}
             </div>
           </motion.div>
         </AnimatePresence>
