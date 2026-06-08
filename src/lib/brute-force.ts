@@ -11,16 +11,19 @@ type AttemptEntry = { count: number; firstAt: number; lockedUntil: number | null
 const attempts = new Map<string, AttemptEntry>();
 
 // Prune every 10 minutes.
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of attempts) {
-    if (entry.lockedUntil && now > entry.lockedUntil) {
-      attempts.delete(key);
-    } else if (!entry.lockedUntil && now - entry.firstAt > 10 * 60_000) {
-      attempts.delete(key);
+// Skip in serverless (Vercel) — each invocation is isolated.
+if (typeof setInterval !== "undefined" && process.env.VERCEL !== "1") {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of attempts) {
+      if (entry.lockedUntil && now > entry.lockedUntil) {
+        attempts.delete(key);
+      } else if (!entry.lockedUntil && now - entry.firstAt > 10 * 60 * 1000) {
+        attempts.delete(key);
+      }
     }
-  }
-}, 10 * 60_1000);
+  }, 10 * 60 * 1000);
+}
 
 export type BruteForceOpts = {
   /** Max failed attempts before lockout. Default: 5. */

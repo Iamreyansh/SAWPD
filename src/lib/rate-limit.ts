@@ -16,12 +16,15 @@ type Entry = { count: number; resetAt: number };
 const store = new Map<string, Entry>();
 
 // Prune expired entries every 5 minutes to prevent memory leaks.
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of store) {
-    if (now > entry.resetAt) store.delete(key);
-  }
-}, 5 * 60 * 1000);
+// Skip in serverless (Vercel) — each invocation is isolated.
+if (typeof setInterval !== "undefined" && process.env.VERCEL !== "1") {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of store) {
+      if (now > entry.resetAt) store.delete(key);
+    }
+  }, 5 * 60 * 1000);
+}
 
 export type RateLimitOpts = {
   /** Window size in milliseconds. Default: 60 000 (1 min). */
