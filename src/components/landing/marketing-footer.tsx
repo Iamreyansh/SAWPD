@@ -45,7 +45,6 @@ export function MarketingFooter() {
                 <li><Link href="/apply" className="transition-colors hover:text-ink">Apply</Link></li>
                 <li><Link href="/about" className="transition-colors hover:text-ink">About</Link></li>
                 <li><Link href="/contact" className="transition-colors hover:text-ink">Contact</Link></li>
-                <li><Link href="/admin/login" className="transition-colors hover:text-ink">Admin</Link></li>
               </ul>
             </div>
             <div>

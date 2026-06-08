@@ -12,11 +12,13 @@ import { Founder } from "@/components/landing/founder";
 import { FAQ } from "@/components/landing/faq";
 import { FinalCta } from "@/components/landing/final-cta";
 import { MarketingFooter } from "@/components/landing/marketing-footer";
+import { getCurrentSeller } from "@/lib/seller-auth";
 
-export default function MarketingPage() {
+export default async function MarketingPage() {
+  const seller = await getCurrentSeller();
   return (
     <>
-      <MarketingHeader />
+      <MarketingHeader seller={seller ? { email: seller.email } : null} />
       <main>
         <Hero />
         <LogoWall />
