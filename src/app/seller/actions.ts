@@ -91,7 +91,8 @@ export async function sellerSignupAction(input: unknown): Promise<SellerAuthResu
     return { ok: true };
   } catch (err) {
     console.error("[sellerSignupAction] unexpected error:", err);
-    return { ok: false, error: "Something went wrong. Please try again." };
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `Something went wrong. (${msg})` };
   }
 }
 
@@ -144,7 +145,8 @@ export async function sellerLoginAction(input: unknown): Promise<SellerAuthResul
     return { ok: true };
   } catch (err) {
     console.error("[sellerLoginAction] unexpected error:", err);
-    return { ok: false, error: "Something went wrong. Please try again." };
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `Something went wrong. (${msg})` };
   }
 }
 
