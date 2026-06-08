@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getStore } from "@/lib/store";
@@ -79,7 +80,9 @@ export default async function StorefrontPage({
         {products.length === 0 ? (
           <EmptyStorefront store={store} />
         ) : (
-          <ProductGrid products={products} />
+          <Suspense>
+            <ProductGrid products={products} />
+          </Suspense>
         )}
       </main>
       <StorefrontFooter store={store} orders={orders} />
