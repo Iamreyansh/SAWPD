@@ -1,55 +1,60 @@
 import "server-only";
-import { promises as fs } from "fs";
-import path from "path";
 import { randomUUID } from "crypto";
 import type { Product, ProductImage } from "@/types/storefront";
 import { MAX_PRODUCT_IMAGES } from "@/types/storefront";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const PRODUCTS_FILE = path.join(DATA_DIR, "products.json");
+function rowToProduct(row: Record<string, unknown>): Product | null {
+  if (!row.id || !row.title) return null;
 
-async function ensureFile<T>(file: string, fallback: T): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    await fs.access(file);
-  } catch {
-    await fs.writeFile(file, JSON.stringify(fallback, null, 2), "utf-8");
+  let images: ProductImage[] = [];
+  if (Array.isArray(row.images)) {
+    images = row.images as ProductImage[];
+  } else if (typeof row.images === "string") {
+    try { images = JSON.parse(row.images); } catch { images = []; }
   }
-}
 
-type LegacyProduct = Partial<Product> & {
-  imageUrl?: string;
-  imageAlt?: string;
-  images?: ProductImage[];
-};
-
-function normalize(p: LegacyProduct): Product | null {
-  if (!p.id || !p.title) return null;
-  let images: ProductImage[] = Array.isArray(p.images) ? p.images : [];
-  if (images.length === 0 && p.imageUrl) {
-    images = [{ id: `img-${randomUUID().slice(0, 8)}`, url: p.imageUrl }];
+  let tags: string[] = [];
+  if (Array.isArray(row.tags)) {
+    tags = row.tags as string[];
+  } else if (typeof row.tags === "string") {
+    try { tags = JSON.parse(row.tags); } catch { tags = []; }
   }
-  if (images.length === 0) return null;
+
   return {
-    id: p.id,
-    slug: p.slug ?? p.id,
-    title: p.title,
-    tagline: p.tagline ?? "",
-    price: p.price ?? 0,
-    altText: p.altText ?? p.imageAlt ?? p.title,
+    id: row.id as string,
+    slug: (row.slug as string) || row.id as string,
+    title: row.title as string,
+    tagline: (row.tagline as string) || "",
+    price: (row.price as number) ?? 0,
+    altText: (row.alt_text as string) || (row.title as string),
     images: images.slice(0, MAX_PRODUCT_IMAGES),
-    stockCount: p.stockCount ?? 0,
-    isAvailable: p.isAvailable ?? true,
-    tags: p.tags ?? [],
-    status: p.status ?? "live",
-    scheduledFor: p.scheduledFor,
+    stockCount: (row.stock_count as number) ?? 0,
+    isAvailable: (row.is_available as boolean) ?? true,
+    tags,
+    status: (row.status as Product["status"]) ?? "live",
+    scheduledFor: (row.scheduled_for as string) || undefined,
   };
 }
 
-/**
- * Public-facing storefront selector: only live products (and scheduled
- * products whose `scheduledFor` has passed). Drafts and archives are hidden.
- */
+function productToRow(product: Product, storeSlug: string): Record<string, unknown> {
+  return {
+    id: product.id,
+    store_slug: storeSlug,
+    slug: product.slug,
+    title: product.title,
+    tagline: product.tagline,
+    price: product.price,
+    alt_text: product.altText,
+    images: product.images,
+    stock_count: product.stockCount,
+    is_available: product.isAvailable,
+    tags: product.tags ?? [],
+    status: product.status ?? "live",
+    scheduled_for: product.scheduledFor || null,
+  };
+}
+
 export function isPubliclyVisible(p: Product, now = new Date()): boolean {
   const status = p.status ?? "live";
   if (status === "draft" || status === "archived") return false;
@@ -61,15 +66,13 @@ export function isPubliclyVisible(p: Product, now = new Date()): boolean {
 }
 
 export async function listProductsForStore(slug: string): Promise<Product[]> {
-  await ensureFile(PRODUCTS_FILE, {});
-  const raw = await fs.readFile(PRODUCTS_FILE, "utf-8");
-  try {
-    const map = JSON.parse(raw) as Record<string, LegacyProduct[]>;
-    const list = map[slug] ?? [];
-    return list.map(normalize).filter((p): p is Product => p !== null);
-  } catch {
-    return [];
-  }
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("products")
+    .select("*")
+    .eq("store_slug", slug);
+  if (error || !data) return [];
+  return data.map(rowToProduct).filter((p): p is Product => p !== null);
 }
 
 export async function listLiveProductsForStore(slug: string): Promise<Product[]> {
@@ -93,27 +96,25 @@ export async function getProduct(
   slug: string,
   id: string
 ): Promise<Product | null> {
-  const all = await listProductsForStore(slug);
-  return all.find((p) => p.id === id) ?? null;
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("products")
+    .select("*")
+    .eq("store_slug", slug)
+    .eq("id", id)
+    .single();
+  if (error || !data) return null;
+  return rowToProduct(data);
 }
 
 export async function addProduct(
   slug: string,
   input: Omit<Product, "id">
 ): Promise<Product> {
-  await ensureFile(PRODUCTS_FILE, {});
-  const raw = await fs.readFile(PRODUCTS_FILE, "utf-8");
-  let map: Record<string, Product[]> = {};
-  try {
-    map = JSON.parse(raw) as Record<string, Product[]>;
-  } catch {
-    map = {};
-  }
   const product: Product = { ...input, id: `p_${randomUUID().slice(0, 8)}` };
-  const list = map[slug] ?? [];
-  list.unshift(product);
-  map[slug] = list;
-  await fs.writeFile(PRODUCTS_FILE, JSON.stringify(map, null, 2), "utf-8");
+  const sb = createAdminClient();
+  const { error } = await sb.from("products").insert(productToRow(product, slug));
+  if (error) throw error;
   return product;
 }
 
@@ -122,40 +123,42 @@ export async function updateProduct(
   id: string,
   patch: Partial<Product>
 ): Promise<Product | null> {
-  await ensureFile(PRODUCTS_FILE, {});
-  const raw = await fs.readFile(PRODUCTS_FILE, "utf-8");
-  let map: Record<string, Product[]> = {};
-  try {
-    map = JSON.parse(raw) as Record<string, Product[]>;
-  } catch {
-    map = {};
-  }
-  const list = map[slug] ?? [];
-  const idx = list.findIndex((p) => p.id === id);
-  if (idx === -1) return null;
-  const updated: Product = { ...list[idx], ...patch };
-  list[idx] = updated;
-  map[slug] = list;
-  await fs.writeFile(PRODUCTS_FILE, JSON.stringify(map, null, 2), "utf-8");
-  return updated;
+  const sb = createAdminClient();
+  const rowPatch: Record<string, unknown> = {};
+  if (patch.title !== undefined) rowPatch.title = patch.title;
+  if (patch.slug !== undefined) rowPatch.slug = patch.slug;
+  if (patch.tagline !== undefined) rowPatch.tagline = patch.tagline;
+  if (patch.price !== undefined) rowPatch.price = patch.price;
+  if (patch.altText !== undefined) rowPatch.alt_text = patch.altText;
+  if (patch.images !== undefined) rowPatch.images = patch.images;
+  if (patch.stockCount !== undefined) rowPatch.stock_count = patch.stockCount;
+  if (patch.isAvailable !== undefined) rowPatch.is_available = patch.isAvailable;
+  if (patch.tags !== undefined) rowPatch.tags = patch.tags ?? [];
+  if (patch.status !== undefined) rowPatch.status = patch.status;
+  if (patch.scheduledFor !== undefined) rowPatch.scheduled_for = patch.scheduledFor || null;
+
+  if (Object.keys(rowPatch).length === 0) return getProduct(slug, id);
+
+  const { error } = await sb
+    .from("products")
+    .update(rowPatch)
+    .eq("store_slug", slug)
+    .eq("id", id);
+  if (error) throw error;
+
+  return getProduct(slug, id);
 }
 
 export async function deleteProduct(
   slug: string,
   id: string
 ): Promise<boolean> {
-  await ensureFile(PRODUCTS_FILE, {});
-  const raw = await fs.readFile(PRODUCTS_FILE, "utf-8");
-  let map: Record<string, Product[]> = {};
-  try {
-    map = JSON.parse(raw) as Record<string, Product[]>;
-  } catch {
-    map = {};
-  }
-  const list = map[slug] ?? [];
-  const next = list.filter((p) => p.id !== id);
-  if (next.length === list.length) return false;
-  map[slug] = next;
-  await fs.writeFile(PRODUCTS_FILE, JSON.stringify(map, null, 2), "utf-8");
+  const sb = createAdminClient();
+  const { error } = await sb
+    .from("products")
+    .delete()
+    .eq("store_slug", slug)
+    .eq("id", id);
+  if (error) throw error;
   return true;
 }

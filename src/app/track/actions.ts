@@ -13,6 +13,8 @@ import { appendAudit } from "@/lib/audit";
 import { notifyStoreEmail } from "@/lib/notify";
 import type { Order, OrderLine } from "@/types/seller";
 import type { Store as StorefrontStore } from "@/types/storefront";
+import { trackLimiter, formLimiter } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/get-ip";
 
 type Store = StorefrontStore;
 
@@ -59,6 +61,11 @@ function normalizePhone(p: string): string {
 }
 
 export async function trackOrderAction(input: unknown): Promise<TrackResult> {
+  const ip = await getClientIp();
+  if (!trackLimiter.check(`track:${ip}`)) {
+    return { ok: false, error: "Too many lookups. Please wait a moment." };
+  }
+
   const parsed = trackSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
@@ -146,6 +153,11 @@ export type RequestReturnResult =
 export async function requestReturnAction(
   input: unknown
 ): Promise<RequestReturnResult> {
+  const ip = await getClientIp();
+  if (!formLimiter.check(`return:${ip}`)) {
+    return { ok: false, error: "Too many return requests. Please wait a moment." };
+  }
+
   const parsed = returnSchema.safeParse(input);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};

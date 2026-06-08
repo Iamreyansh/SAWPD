@@ -5,6 +5,8 @@ import { addApplication } from "@/lib/applications";
 import { getCurrentSeller } from "@/lib/seller-auth";
 import { notifyApplicationReceived } from "@/lib/notify";
 import type { ApplicationInput } from "@/types/applications";
+import { formLimiter } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/get-ip";
 
 const applySchema = z.object({
   fullName: z.string().min(2, "Please enter your full name"),
@@ -46,6 +48,11 @@ export type ApplyResult =
 export async function submitApplication(
   input: unknown
 ): Promise<ApplyResult> {
+  const ip = await getClientIp();
+  if (!formLimiter.check(`apply:${ip}`)) {
+    return { ok: false, error: "Too many submissions. Please wait a moment and try again." };
+  }
+
   const parsed = applySchema.safeParse(input);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};

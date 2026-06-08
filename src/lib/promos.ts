@@ -1,63 +1,71 @@
 import "server-only";
-import { promises as fs } from "fs";
-import path from "path";
 import { randomUUID } from "crypto";
 import type { PromoCode, ApplyPromoResult } from "@/types/seller";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const PROMOS_FILE = path.join(DATA_DIR, "promos.json");
-
-async function ensureFile(): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    await fs.access(PROMOS_FILE);
-  } catch {
-    await fs.writeFile(PROMOS_FILE, JSON.stringify({}, null, 2), "utf-8");
-  }
-}
-
-async function readAll(): Promise<Record<string, PromoCode[]>> {
-  await ensureFile();
-  const raw = await fs.readFile(PROMOS_FILE, "utf-8");
-  try {
-    return JSON.parse(raw) as Record<string, PromoCode[]>;
-  } catch {
-    return {};
-  }
-}
-
-async function writeAll(map: Record<string, PromoCode[]>): Promise<void> {
-  await fs.writeFile(PROMOS_FILE, JSON.stringify(map, null, 2), "utf-8");
+function rowToPromo(row: Record<string, unknown>): PromoCode {
+  return {
+    id: row.id as string,
+    storeSlug: row.store_slug as string,
+    code: row.code as string,
+    description: (row.description as string) ?? undefined,
+    type: row.type as "percent" | "fixed",
+    value: row.value as number,
+    minOrderAmount: (row.min_order_amount as number) ?? undefined,
+    usageLimit: (row.usage_limit as number) ?? undefined,
+    usageCount: row.usage_count as number,
+    startsAt: (row.starts_at as string) ?? undefined,
+    expiresAt: (row.expires_at as string) ?? undefined,
+    status: row.status as "active" | "paused",
+    createdAt: row.created_at as string,
+  };
 }
 
 export async function listPromosForStore(slug: string): Promise<PromoCode[]> {
-  const map = await readAll();
-  return map[slug] ?? [];
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("promos")
+    .select("*")
+    .eq("store_slug", slug);
+  if (error || !data) return [];
+  return data.map(rowToPromo);
 }
 
 export async function getPromoById(
   slug: string,
   id: string
 ): Promise<PromoCode | null> {
-  const all = await listPromosForStore(slug);
-  return all.find((p) => p.id === id) ?? null;
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("promos")
+    .select("*")
+    .eq("store_slug", slug)
+    .eq("id", id)
+    .single();
+  if (error || !data) return null;
+  return rowToPromo(data);
 }
 
 export async function getPromoByCode(
   slug: string,
   code: string
 ): Promise<PromoCode | null> {
-  const all = await listPromosForStore(slug);
   const upper = code.trim().toUpperCase();
-  return all.find((p) => p.code.toUpperCase() === upper) ?? null;
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("promos")
+    .select("*")
+    .eq("store_slug", slug)
+    .ilike("code", upper)
+    .single();
+  if (error || !data) return null;
+  return rowToPromo(data);
 }
 
 export async function addPromo(
   slug: string,
   input: Omit<PromoCode, "id" | "usageCount" | "createdAt" | "storeSlug">
 ): Promise<PromoCode> {
-  const map = await readAll();
-  const list = map[slug] ?? [];
   const promo: PromoCode = {
     ...input,
     id: `promo_${randomUUID().slice(0, 8)}`,
@@ -65,9 +73,25 @@ export async function addPromo(
     usageCount: 0,
     createdAt: new Date().toISOString(),
   };
-  list.unshift(promo);
-  map[slug] = list;
-  await writeAll(map);
+
+  const sb = createAdminClient();
+  const { error } = await sb.from("promos").insert({
+    id: promo.id,
+    store_slug: promo.storeSlug,
+    code: promo.code,
+    description: promo.description || null,
+    type: promo.type,
+    value: promo.value,
+    min_order_amount: promo.minOrderAmount ?? null,
+    usage_limit: promo.usageLimit ?? null,
+    usage_count: 0,
+    starts_at: promo.startsAt || null,
+    expires_at: promo.expiresAt || null,
+    status: promo.status,
+    created_at: promo.createdAt,
+  });
+  if (error) throw error;
+
   return promo;
 }
 
@@ -76,24 +100,38 @@ export async function updatePromo(
   id: string,
   patch: Partial<Omit<PromoCode, "id" | "storeSlug" | "createdAt" | "usageCount">>
 ): Promise<PromoCode | null> {
-  const map = await readAll();
-  const list = map[slug] ?? [];
-  const idx = list.findIndex((p) => p.id === id);
-  if (idx === -1) return null;
-  const updated: PromoCode = { ...list[idx], ...patch };
-  list[idx] = updated;
-  map[slug] = list;
-  await writeAll(map);
-  return updated;
+  const sb = createAdminClient();
+  const rowPatch: Record<string, unknown> = {};
+  if (patch.code !== undefined) rowPatch.code = patch.code;
+  if (patch.description !== undefined) rowPatch.description = patch.description || null;
+  if (patch.type !== undefined) rowPatch.type = patch.type;
+  if (patch.value !== undefined) rowPatch.value = patch.value;
+  if (patch.minOrderAmount !== undefined) rowPatch.min_order_amount = patch.minOrderAmount ?? null;
+  if (patch.usageLimit !== undefined) rowPatch.usage_limit = patch.usageLimit ?? null;
+  if (patch.startsAt !== undefined) rowPatch.starts_at = patch.startsAt || null;
+  if (patch.expiresAt !== undefined) rowPatch.expires_at = patch.expiresAt || null;
+  if (patch.status !== undefined) rowPatch.status = patch.status;
+
+  if (Object.keys(rowPatch).length === 0) return getPromoById(slug, id);
+
+  const { error } = await sb
+    .from("promos")
+    .update(rowPatch)
+    .eq("store_slug", slug)
+    .eq("id", id);
+  if (error) throw error;
+
+  return getPromoById(slug, id);
 }
 
 export async function deletePromo(slug: string, id: string): Promise<boolean> {
-  const map = await readAll();
-  const list = map[slug] ?? [];
-  const next = list.filter((p) => p.id !== id);
-  if (next.length === list.length) return false;
-  map[slug] = next;
-  await writeAll(map);
+  const sb = createAdminClient();
+  const { error } = await sb
+    .from("promos")
+    .delete()
+    .eq("store_slug", slug)
+    .eq("id", id);
+  if (error) throw error;
   return true;
 }
 
@@ -123,10 +161,6 @@ export function getPromoState(promo: PromoCode, now = new Date()): {
   return { state: "active" };
 }
 
-/**
- * Validate a code against a cart subtotal without mutating usage.
- * Use this in the checkout "Apply" button to show the discount preview.
- */
 export async function validatePromo(
   slug: string,
   code: string,
@@ -161,10 +195,6 @@ export async function validatePromo(
   return { ok: true, discountAmount, promoCode: promo.code };
 }
 
-/**
- * Validate a code against a cart subtotal and atomically increment usage.
- * Returns the discount amount on success.
- */
 export async function applyPromo(
   slug: string,
   code: string,
@@ -196,23 +226,24 @@ export async function applyPromo(
     return { ok: false, error: "Code not applicable to this order." };
   }
 
-  // Atomic-ish increment: read, check, write
-  const map = await readAll();
-  const list = map[slug] ?? [];
-  const idx = list.findIndex((p) => p.id === promo.id);
-  if (idx === -1) return { ok: false, error: "Code is no longer available." };
-  const fresh = list[idx];
-  if (
-    fresh.usageLimit != null &&
-    fresh.usageCount >= fresh.usageLimit
-  ) {
+  // Atomic increment via Supabase RPC-style update
+  const sb = createAdminClient();
+  const { data: fresh, error: fetchErr } = await sb
+    .from("promos")
+    .select("usage_count, usage_limit")
+    .eq("id", promo.id)
+    .single();
+  if (fetchErr || !fresh) return { ok: false, error: "Code is no longer available." };
+  if (fresh.usage_limit != null && fresh.usage_count >= fresh.usage_limit) {
     return { ok: false, error: "This code has reached its limit." };
   }
-  list[idx] = { ...fresh, usageCount: fresh.usageCount + 1 };
-  map[slug] = list;
-  await writeAll(map);
+  const { error: updateErr } = await sb
+    .from("promos")
+    .update({ usage_count: fresh.usage_count + 1 })
+    .eq("id", promo.id);
+  if (updateErr) return { ok: false, error: "Failed to apply code." };
 
-  return { ok: true, discountAmount, promoCode: fresh.code };
+  return { ok: true, discountAmount, promoCode: promo.code };
 }
 
 export function generatePromoCode(): string {

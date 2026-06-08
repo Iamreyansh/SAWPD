@@ -1,46 +1,66 @@
 import "server-only";
-import { promises as fs } from "fs";
-import path from "path";
 import { randomUUID } from "crypto";
 import type { Order, OrderStatus } from "@/types/seller";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
-
-async function ensureFile<T>(file: string, fallback: T): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    await fs.access(file);
-  } catch {
-    await fs.writeFile(file, JSON.stringify(fallback, null, 2), "utf-8");
+function rowToOrder(row: Record<string, unknown>): Order {
+  let customer: Order["customer"] = { name: "", phone: "", address: "" };
+  if (row.customer && typeof row.customer === "object") {
+    customer = row.customer as Order["customer"];
+  } else if (typeof row.customer === "string") {
+    try { customer = JSON.parse(row.customer); } catch { /* keep default */ }
   }
-}
 
-async function readAll(): Promise<Order[]> {
-  await ensureFile(ORDERS_FILE, []);
-  const raw = await fs.readFile(ORDERS_FILE, "utf-8");
-  try {
-    const arr = JSON.parse(raw) as unknown;
-    return Array.isArray(arr) ? (arr as Order[]) : [];
-  } catch {
-    return [];
+  let lines: Order["lines"] = [];
+  if (Array.isArray(row.lines)) {
+    lines = row.lines as Order["lines"];
+  } else if (typeof row.lines === "string") {
+    try { lines = JSON.parse(row.lines); } catch { /* keep empty */ }
   }
-}
 
-async function writeAll(orders: Order[]): Promise<void> {
-  await fs.writeFile(ORDERS_FILE, JSON.stringify(orders, null, 2), "utf-8");
+  return {
+    id: row.id as string,
+    storeSlug: row.store_slug as string,
+    createdAt: row.created_at as string,
+    status: row.status as OrderStatus,
+    customer,
+    lines,
+    total: row.total as number,
+    subtotal: (row.subtotal as number) ?? undefined,
+    promoCode: (row.promo_code as string) ?? undefined,
+    discountAmount: (row.discount_amount as number) ?? undefined,
+    screenshotDataUrl: (row.screenshot_data_url as string) ?? undefined,
+    paymentScreenshot: (row.payment_screenshot as Order["paymentScreenshot"]) ?? undefined,
+    resendRequestedAt: (row.resend_requested_at as string) ?? undefined,
+    verifiedAt: (row.verified_at as string) ?? undefined,
+    shippedAt: (row.shipped_at as string) ?? undefined,
+    completedAt: (row.completed_at as string) ?? undefined,
+    cancelledAt: (row.cancelled_at as string) ?? undefined,
+    trackingNote: (row.tracking_note as string) ?? undefined,
+    reviewerNote: (row.reviewer_note as string) ?? undefined,
+  };
 }
 
 export async function listOrders(slug: string): Promise<Order[]> {
-  const all = await readAll();
-  return all
-    .filter((o) => o.storeSlug === slug)
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("orders")
+    .select("*")
+    .eq("store_slug", slug)
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map(rowToOrder);
 }
 
 export async function getOrder(id: string): Promise<Order | null> {
-  const all = await readAll();
-  return all.find((o) => o.id === id) ?? null;
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("orders")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error || !data) return null;
+  return rowToOrder(data);
 }
 
 export type CreateOrderInput = Omit<
@@ -51,15 +71,32 @@ export type CreateOrderInput = Omit<
 };
 
 export async function addOrder(input: CreateOrderInput): Promise<Order> {
-  const all = await readAll();
   const order: Order = {
     ...input,
     id: `ord_${randomUUID().slice(0, 8)}`,
     createdAt: new Date().toISOString(),
     status: input.status ?? "awaiting_verification",
   };
-  all.unshift(order);
-  await writeAll(all);
+
+  const sb = createAdminClient();
+  const { error } = await sb.from("orders").insert({
+    id: order.id,
+    store_slug: order.storeSlug,
+    created_at: order.createdAt,
+    status: order.status,
+    customer: order.customer,
+    lines: order.lines,
+    total: order.total,
+    subtotal: order.subtotal ?? null,
+    promo_code: order.promoCode ?? null,
+    discount_amount: order.discountAmount ?? null,
+    screenshot_data_url: order.screenshotDataUrl ?? null,
+    payment_screenshot: order.paymentScreenshot ?? null,
+    tracking_note: order.trackingNote ?? null,
+    reviewer_note: order.reviewerNote ?? null,
+  });
+  if (error) throw error;
+
   return order;
 }
 
@@ -72,25 +109,26 @@ export async function updateOrderStatus(
   id: string,
   patch: OrderStatusUpdate
 ): Promise<Order | null> {
-  const all = await readAll();
-  const idx = all.findIndex((o) => o.id === id);
-  if (idx === -1) return null;
   const now = new Date().toISOString();
-  const updated: Order = {
-    ...all[idx],
+  const sb = createAdminClient();
+
+  const rowPatch: Record<string, unknown> = {
     status: patch.status,
-    trackingNote: patch.trackingNote ?? all[idx].trackingNote,
-    resendRequestedAt:
-      patch.status === "awaiting_payment" ? now : all[idx].resendRequestedAt,
-    verifiedAt:
-      patch.status === "verified" ? now : all[idx].verifiedAt,
-    shippedAt: patch.status === "shipped" ? now : all[idx].shippedAt,
-    completedAt:
-      patch.status === "completed" ? now : all[idx].completedAt,
-    cancelledAt:
-      patch.status === "cancelled" ? now : all[idx].cancelledAt,
   };
-  all[idx] = updated;
-  await writeAll(all);
-  return updated;
+  if (patch.trackingNote !== undefined) rowPatch.tracking_note = patch.trackingNote;
+
+  // Auto-stamp timestamps
+  if (patch.status === "awaiting_payment") rowPatch.resend_requested_at = now;
+  if (patch.status === "verified") rowPatch.verified_at = now;
+  if (patch.status === "shipped") rowPatch.shipped_at = now;
+  if (patch.status === "completed") rowPatch.completed_at = now;
+  if (patch.status === "cancelled") rowPatch.cancelled_at = now;
+
+  const { error } = await sb
+    .from("orders")
+    .update(rowPatch)
+    .eq("id", id);
+  if (error) throw error;
+
+  return getOrder(id);
 }

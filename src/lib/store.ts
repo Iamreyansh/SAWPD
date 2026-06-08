@@ -1,76 +1,103 @@
 import "server-only";
-import { promises as fs } from "fs";
-import path from "path";
 import type { SellerStore } from "@/types/seller";
 import type { PlanId } from "@/lib/plans";
 import { nextRenewalIso, newBillingId, PLAN_PRICING, planReference } from "@/lib/plans";
 import { DEFAULT_RETURNS_POLICY } from "@/types/storefront";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const STORE_FILE = path.join(DATA_DIR, "store.json");
-const BILLING_FILE = path.join(DATA_DIR, "billing.json");
+function rowToStore(row: Record<string, unknown>): SellerStore {
+  const heroHeadline = Array.isArray(row.hero_headline)
+    ? row.hero_headline
+    : typeof row.hero_headline === "string"
+      ? (() => { try { return JSON.parse(row.hero_headline); } catch { return []; } })()
+      : [];
 
-async function ensureFile<T>(file: string, fallback: T): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    await fs.access(file);
-  } catch {
-    await fs.writeFile(file, JSON.stringify(fallback, null, 2), "utf-8");
-  }
+  return {
+    slug: row.slug as string,
+    sellerId: row.seller_id as string,
+    name: row.name as string,
+    ownerHandle: row.owner_handle as string,
+    whatsapp: (row.whatsapp as string) || undefined,
+    heroImage: row.hero_image as string,
+    heroKicker: row.hero_kicker as string,
+    heroHeadline,
+    heroSub: row.hero_sub as string,
+    upiId: row.upi_id as string,
+    notifyEmail: row.notify_email as string,
+    paused: row.paused as boolean,
+    pausedReason: (row.paused_reason as string) || undefined,
+    onboardingDismissed: row.onboarding_dismissed as boolean,
+    returnsPolicy: {
+      enabled: row.returns_enabled as boolean,
+      windowDays: row.returns_window_days as number,
+      mode: (row.returns_mode as "any" | "defective_only") || "any",
+      policyText: (row.returns_policy_text as string) || undefined,
+    },
+    plan: (row.plan as PlanId) || undefined,
+    trialEndsAt: (row.trial_ends_at as string) || undefined,
+  };
 }
 
-/**
- * Reads the raw store map. Use only internally — callers should go through
- * `getStore(slug)` or `listStores()` so normalization is applied.
- *
- * If the file is `[]` (left over from an earlier pre-Set 21 wipe), treat
- * it as an empty object. Otherwise `addStore`/`updateStore` would write
- * non-numeric keys onto an array and `JSON.stringify` would silently
- * drop them.
- */
-async function readStoreMap(): Promise<Record<string, SellerStore>> {
-  await ensureFile(STORE_FILE, {});
-  const raw = await fs.readFile(STORE_FILE, "utf-8");
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, SellerStore>;
-    }
-    return {};
-  } catch {
-    return {};
-  }
+function storeToRow(store: SellerStore): Record<string, unknown> {
+  return {
+    slug: store.slug,
+    seller_id: store.sellerId,
+    name: store.name,
+    owner_handle: store.ownerHandle,
+    whatsapp: store.whatsapp || null,
+    hero_image: store.heroImage,
+    hero_kicker: store.heroKicker,
+    hero_headline: store.heroHeadline,
+    hero_sub: store.heroSub,
+    upi_id: store.upiId,
+    notify_email: store.notifyEmail,
+    paused: store.paused ?? false,
+    paused_reason: store.pausedReason || null,
+    onboarding_dismissed: store.onboardingDismissed ?? false,
+    returns_enabled: store.returnsPolicy?.enabled ?? DEFAULT_RETURNS_POLICY.enabled,
+    returns_window_days: store.returnsPolicy?.windowDays ?? DEFAULT_RETURNS_POLICY.windowDays,
+    returns_mode: store.returnsPolicy?.mode ?? DEFAULT_RETURNS_POLICY.mode,
+    returns_policy_text: store.returnsPolicy?.policyText || null,
+    plan: store.plan || null,
+    trial_ends_at: store.trialEndsAt || null,
+  };
+}
+
+function normalizeStore(s: SellerStore): SellerStore {
+  if (s.returnsPolicy) return s;
+  return { ...s, returnsPolicy: { ...DEFAULT_RETURNS_POLICY } };
 }
 
 export async function getStore(slug: string): Promise<SellerStore | null> {
-  const stores = await readStoreMap();
-  const s = stores[slug] ?? null;
-  return s ? normalizeStore(s) : null;
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("stores")
+    .select("*")
+    .eq("slug", slug)
+    .single();
+  if (error || !data) return null;
+  return normalizeStore(rowToStore(data));
 }
 
 export async function listStores(): Promise<SellerStore[]> {
-  const stores = await readStoreMap();
-  return Object.values(stores).map(normalizeStore);
+  const sb = createAdminClient();
+  const { data, error } = await sb.from("stores").select("*");
+  if (error || !data) return [];
+  return data.map((row) => normalizeStore(rowToStore(row)));
 }
 
-/**
- * Lists stores owned by a specific seller. Returns an empty array if
- * the seller has no stores. Used by the seller dashboard to scope
- * visibility to the signed-in user.
- */
 export async function getStoresForSeller(
   sellerId: string,
 ): Promise<SellerStore[]> {
-  const all = await listStores();
-  return all.filter((s) => s.sellerId === sellerId);
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("stores")
+    .select("*")
+    .eq("seller_id", sellerId);
+  if (error || !data) return [];
+  return data.map((row) => normalizeStore(rowToStore(row)));
 }
 
-/**
- * Returns the first store owned by a given seller. If `sellerId` is
- * omitted, returns the first store globally (legacy behaviour, used by
- * the admin overview and the public landing pages). Callers that need
- * per-seller scoping must pass `sellerId` explicitly.
- */
 export async function getFirstStore(
   sellerId?: string,
 ): Promise<SellerStore | null> {
@@ -82,11 +109,6 @@ export async function getFirstStore(
   return all[0] ?? null;
 }
 
-/**
- * Returns a store and asserts it is owned by `sellerId`. Use this from
- * the seller dashboard so a seller can never read or mutate a store
- * they don't own — even if they pass the slug from the URL.
- */
 export async function getStoreForSeller(
   slug: string,
   sellerId: string,
@@ -97,17 +119,6 @@ export async function getStoreForSeller(
   return s;
 }
 
-/**
- * Returns the store the seller is currently working on inside /dashboard.
- *
- * - If `preferredSlug` is passed and the seller owns it, use that store.
- * - Otherwise, return the first store owned by the seller.
- * - Returns `null` if the seller has no stores yet.
- *
- * Cookie validation happens in `seller-auth#getActiveStoreSlugFromCookie`;
- * the dashboard layout calls this to translate a verified slug into a
- * `SellerStore` (or fall back).
- */
 export async function getActiveStoreForSeller(
   sellerId: string,
   preferredSlug?: string | null,
@@ -124,43 +135,73 @@ export async function updateStore(
   patch: Partial<SellerStore>,
   options?: { asSellerId?: string },
 ): Promise<SellerStore | null> {
-  const stores = await readStoreMap();
-  const current = stores[slug];
-  if (!current) return null;
-  if (options?.asSellerId && current.sellerId !== options.asSellerId) {
-    return null;
+  const sb = createAdminClient();
+
+  if (options?.asSellerId) {
+    const current = await getStore(slug);
+    if (!current || current.sellerId !== options.asSellerId) return null;
   }
-  const updated = normalizeStore({ ...current, ...patch });
-  stores[slug] = updated;
-  await fs.writeFile(STORE_FILE, JSON.stringify(stores, null, 2), "utf-8");
-  return updated;
+
+  const rowPatch: Record<string, unknown> = {};
+  if (patch.name !== undefined) rowPatch.name = patch.name;
+  if (patch.ownerHandle !== undefined) rowPatch.owner_handle = patch.ownerHandle;
+  if (patch.whatsapp !== undefined) rowPatch.whatsapp = patch.whatsapp || null;
+  if (patch.heroImage !== undefined) rowPatch.hero_image = patch.heroImage;
+  if (patch.heroKicker !== undefined) rowPatch.hero_kicker = patch.heroKicker;
+  if (patch.heroHeadline !== undefined) rowPatch.hero_headline = patch.heroHeadline;
+  if (patch.heroSub !== undefined) rowPatch.hero_sub = patch.heroSub;
+  if (patch.upiId !== undefined) rowPatch.upi_id = patch.upiId;
+  if (patch.notifyEmail !== undefined) rowPatch.notify_email = patch.notifyEmail;
+  if (patch.paused !== undefined) rowPatch.paused = patch.paused;
+  if (patch.pausedReason !== undefined) rowPatch.paused_reason = patch.pausedReason || null;
+  if (patch.onboardingDismissed !== undefined) rowPatch.onboarding_dismissed = patch.onboardingDismissed;
+  if (patch.plan !== undefined) rowPatch.plan = patch.plan || null;
+  if (patch.trialEndsAt !== undefined) rowPatch.trial_ends_at = patch.trialEndsAt || null;
+  if (patch.returnsPolicy !== undefined) {
+    rowPatch.returns_enabled = patch.returnsPolicy?.enabled ?? false;
+    rowPatch.returns_window_days = patch.returnsPolicy?.windowDays ?? 7;
+    rowPatch.returns_mode = patch.returnsPolicy?.mode ?? "any";
+    rowPatch.returns_policy_text = patch.returnsPolicy?.policyText || null;
+  }
+
+  if (Object.keys(rowPatch).length === 0) return getStore(slug);
+
+  const { error } = await sb.from("stores").update(rowPatch).eq("slug", slug);
+  if (error) throw error;
+
+  return getStore(slug);
 }
 
-/**
- * Creates a new store owned by `sellerId`. The slug is generated from
- * `name` (and uniquified if it collides). Used by the admin application
- * approval flow: when an admin approves an application, this provisions
- * the seller's new shop and links it to the seller's account.
- */
 export async function addStore(
   input: Omit<SellerStore, "slug" | "sellerId"> & { slug?: string },
   sellerId: string,
 ): Promise<SellerStore> {
-  const stores = await readStoreMap();
+  const sb = createAdminClient();
   const base = (input.slug ?? slugify(input.name)).slice(0, 60);
+
+  // Find unique slug
   let candidate = base;
   let suffix = 1;
-  while (stores[candidate]) {
+  while (true) {
+    const { data } = await sb
+      .from("stores")
+      .select("slug")
+      .eq("slug", candidate)
+      .single();
+    if (!data) break;
     suffix += 1;
     candidate = `${base}-${suffix}`;
   }
+
   const store: SellerStore = normalizeStore({
     ...input,
     slug: candidate,
     sellerId,
   });
-  stores[candidate] = store;
-  await fs.writeFile(STORE_FILE, JSON.stringify(stores, null, 2), "utf-8");
+
+  const { error } = await sb.from("stores").insert(storeToRow(store));
+  if (error) throw error;
+
   return store;
 }
 
@@ -174,11 +215,6 @@ function slugify(input: string): string {
   );
 }
 
-function normalizeStore(s: SellerStore): SellerStore {
-  if (s.returnsPolicy) return s;
-  return { ...s, returnsPolicy: { ...DEFAULT_RETURNS_POLICY } };
-}
-
 export type BillingRecord = {
   id: string;
   storeSlug: string;
@@ -188,37 +224,28 @@ export type BillingRecord = {
   reference: string;
 };
 
-async function readBilling(): Promise<BillingRecord[]> {
-  await ensureFile(BILLING_FILE, []);
-  const raw = await fs.readFile(BILLING_FILE, "utf-8");
-  try {
-    const arr = JSON.parse(raw) as unknown;
-    return Array.isArray(arr) ? (arr as BillingRecord[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeBilling(records: BillingRecord[]): Promise<void> {
-  await fs.writeFile(BILLING_FILE, JSON.stringify(records, null, 2), "utf-8");
+function rowToBilling(row: Record<string, unknown>): BillingRecord {
+  return {
+    id: row.id as string,
+    storeSlug: row.store_slug as string,
+    plan: row.plan as PlanId,
+    amountInr: row.amount_inr as number,
+    createdAt: row.created_at as string,
+    reference: row.reference as string,
+  };
 }
 
 export async function listBillingForStore(slug: string): Promise<BillingRecord[]> {
-  const all = await readBilling();
-  return all
-    .filter((b) => b.storeSlug === slug)
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("billing")
+    .select("*")
+    .eq("store_slug", slug)
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map(rowToBilling);
 }
 
-/**
- * Early-access activation. No payment is collected during this phase —
- * we just stamp the plan + a renewal date and write a no-charge billing
- * record. Swap for a real Razorpay checkout + webhook when billing goes live.
- *
- * Named `activatePlanMock` for historical reasons; effectively this is just
- * the "no payment taken yet" path. The legacy name is preserved to keep
- * the call sites in `dashboard/actions.ts` and `admin/actions.ts` stable.
- */
 export async function activatePlanMock(
   slug: string,
   plan: PlanId,
@@ -226,9 +253,8 @@ export async function activatePlanMock(
 ): Promise<{ store: SellerStore; billing: BillingRecord } | null> {
   const store = await getStore(slug);
   if (!store) return null;
-  if (options?.asSellerId && store.sellerId !== options.asSellerId) {
-    return null;
-  }
+  if (options?.asSellerId && store.sellerId !== options.asSellerId) return null;
+
   const now = new Date();
   const renewsAt = nextRenewalIso(plan, now);
   const updated = await updateStore(slug, {
@@ -236,6 +262,7 @@ export async function activatePlanMock(
     trialEndsAt: renewsAt,
   });
   if (!updated) return null;
+
   const billing: BillingRecord = {
     id: newBillingId(),
     storeSlug: slug,
@@ -244,8 +271,17 @@ export async function activatePlanMock(
     createdAt: now.toISOString(),
     reference: planReference(),
   };
-  const all = await readBilling();
-  all.unshift(billing);
-  await writeBilling(all);
+
+  const sb = createAdminClient();
+  const { error } = await sb.from("billing").insert({
+    id: billing.id,
+    store_slug: billing.storeSlug,
+    plan: billing.plan,
+    amount_inr: billing.amountInr,
+    created_at: billing.createdAt,
+    reference: billing.reference,
+  });
+  if (error) throw error;
+
   return { store: updated, billing };
 }

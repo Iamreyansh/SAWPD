@@ -1,14 +1,10 @@
 "use server";
 
 import "server-only";
-import { promises as fs } from "fs";
-import path from "path";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { notifySubscriberAdded } from "@/lib/notify";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const SUBSCRIBERS_FILE = path.join(DATA_DIR, "subscribers.json");
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const emailSchema = z.string().email("Enter a valid email");
 
@@ -23,21 +19,6 @@ export type SubscribeResult =
   | { ok: true; already: boolean }
   | { ok: false; error: string };
 
-async function readSubs(): Promise<Subscriber[]> {
-  try {
-    const raw = await fs.readFile(SUBSCRIBERS_FILE, "utf-8");
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as Subscriber[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeSubs(subs: Subscriber[]): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(SUBSCRIBERS_FILE, JSON.stringify(subs, null, 2), "utf-8");
-}
-
 export async function subscribeEmail(
   formData: FormData
 ): Promise<SubscribeResult> {
@@ -47,23 +28,45 @@ export async function subscribeEmail(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid email" };
   }
   const email = parsed.data;
-  const subs = await readSubs();
-  if (subs.some((s) => s.email === email)) {
-    return { ok: true, already: true };
-  }
-  const sub: Subscriber = {
-    id: `sub_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+
+  const sb = createAdminClient();
+
+  // Check if already subscribed
+  const { data: existing } = await sb
+    .from("subscribers")
+    .select("id")
+    .eq("email", email)
+    .single();
+  if (existing) return { ok: true, already: true };
+
+  const id = `sub_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const { error } = await sb.from("subscribers").insert({
+    id,
     email,
-    createdAt: new Date().toISOString(),
+    created_at: new Date().toISOString(),
     source: "marketing",
-  };
-  subs.unshift(sub);
-  await writeSubs(subs);
+  });
+  if (error) {
+    if (error.code === "23505") return { ok: true, already: true };
+    throw error;
+  }
+
   revalidatePath("/admin");
-  void notifySubscriberAdded({ email: sub.email });
+  void notifySubscriberAdded({ email });
   return { ok: true, already: false };
 }
 
 export async function listSubscribers(): Promise<Subscriber[]> {
-  return readSubs();
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("subscribers")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((row) => ({
+    id: row.id as string,
+    email: row.email as string,
+    createdAt: row.created_at as string,
+    source: row.source as string,
+  }));
 }

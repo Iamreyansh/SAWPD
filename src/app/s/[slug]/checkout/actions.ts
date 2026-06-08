@@ -8,6 +8,8 @@ import { isStoreOpen } from "@/lib/trial";
 import { checkPaymentScreenshot } from "@/lib/payment-check";
 import { notifyOrderPlaced } from "@/lib/notify";
 import type { OrderLine } from "@/types/seller";
+import { checkoutLimiter } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/get-ip";
 
 const customerSchema = z.object({
   name: z.string().min(2),
@@ -61,6 +63,13 @@ export async function validatePromoAction(
 export async function placeOrder(
   input: unknown
 ): Promise<CheckoutResult> {
+  const ip = await getClientIp();
+  if (!checkoutLimiter.check(`checkout:${ip}`)) {
+    const retryMs = checkoutLimiter.retryAfter(`checkout:${ip}`);
+    const retrySec = Math.ceil(retryMs / 1000);
+    return { ok: false, error: `Too many orders. Wait ${retrySec}s and try again.` };
+  }
+
   const parsed = placeOrderSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Invalid order data." };

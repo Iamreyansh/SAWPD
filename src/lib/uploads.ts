@@ -1,8 +1,7 @@
 import "server-only";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
+const BUCKET = "product-images";
 
 const ALLOWED_MIME = new Set([
   "image/jpeg",
@@ -37,27 +36,35 @@ export async function uploadProductImage(file: File): Promise<UploadResult> {
   if (file.size > MAX_BYTES) {
     return { ok: false, error: "Max file size is 5MB." };
   }
-  await mkdir(UPLOAD_DIR, { recursive: true });
+
   const ext = EXT_BY_MIME[file.type] ?? "bin";
   const filename = `${crypto.randomUUID()}.${ext}`;
-  const filepath = path.join(UPLOAD_DIR, filename);
   const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(filepath, buffer);
-  return { ok: true, url: `/uploads/${filename}`, filename };
+
+  const sb = createAdminClient();
+  const { error } = await sb.storage
+    .from(BUCKET)
+    .upload(filename, buffer, { contentType: file.type });
+  if (error) return { ok: false, error: error.message };
+
+  const { data: urlData } = sb.storage.from(BUCKET).getPublicUrl(filename);
+  return { ok: true, url: urlData.publicUrl, filename };
 }
 
-function isLocalUpload(url: string): boolean {
-  return url.startsWith("/uploads/");
+function isSupabaseUpload(url: string): boolean {
+  return url.includes(".supabase.co/storage/v1/object/public/");
+}
+
+function extractFilename(url: string): string | null {
+  // Extract filename from Supabase storage URL
+  const match = url.match(/\/object\/public\/[^/]+\/(.+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 export async function deleteUploadIfLocal(url: string): Promise<void> {
-  if (!isLocalUpload(url)) return;
-  const filename = url.slice("/uploads/".length);
-  if (!filename || filename.includes("..") || filename.includes("/")) return;
-  const filepath = path.join(UPLOAD_DIR, filename);
-  try {
-    await unlink(filepath);
-  } catch {
-    // File may already be gone — fine.
-  }
+  if (!isSupabaseUpload(url)) return;
+  const filename = extractFilename(url);
+  if (!filename) return;
+  const sb = createAdminClient();
+  await sb.storage.from(BUCKET).remove([filename]);
 }

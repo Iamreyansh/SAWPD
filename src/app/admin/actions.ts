@@ -15,17 +15,39 @@ import { addStore, getStore, updateStore } from "@/lib/store";
 import { activatePlanMock } from "@/lib/store";
 import { notifyLowStock, notifyStoreEmail } from "@/lib/notify";
 import { listProductsForStore } from "@/lib/products";
+import { loginLimiter } from "@/lib/rate-limit";
+import { loginProtection } from "@/lib/brute-force";
+import { getClientIp } from "@/lib/get-ip";
 
 export type LoginResult = { ok: true } | { ok: false; error: string };
 
 export async function loginAction(formData: FormData): Promise<LoginResult> {
+  const ip = await getClientIp();
+  const key = `admin:${ip}`;
+
+  // Rate limit: 5 attempts per 15 min
+  if (!loginLimiter.check(key)) {
+    const retryMs = loginLimiter.retryAfter(key);
+    const retryMin = Math.ceil(retryMs / 60_000);
+    return { ok: false, error: `Too many attempts. Try again in ${retryMin} min.` };
+  }
+
+  // Brute-force lockout: 5 failures = 15 min lock
+  if (loginProtection.isLocked(key)) {
+    const lockMs = loginProtection.retryAfter(key);
+    const lockMin = Math.ceil(lockMs / 60_000);
+    return { ok: false, error: `Account locked. Try again in ${lockMin} min.` };
+  }
+
   const password = String(formData.get("password") ?? "");
   if (!password) {
     return { ok: false, error: "Password is required." };
   }
   if (!checkPassword(password)) {
+    loginProtection.recordFailure(key);
     return { ok: false, error: "Wrong password." };
   }
+  loginProtection.recordSuccess(key);
   await createAdminSession();
   await appendAudit({ kind: "admin_login" });
   redirect("/admin");

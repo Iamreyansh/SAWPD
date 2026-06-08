@@ -1,43 +1,23 @@
 import "server-only";
-import { promises as fs } from "fs";
-import path from "path";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import type { PublicSeller, Seller } from "@/types/seller";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "sellers.json");
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const BCRYPT_ROUNDS = 10;
 const SELLER_ID_PREFIX = "sel_";
 
-async function ensureFile(): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    await fs.access(DATA_FILE);
-  } catch {
-    await fs.writeFile(DATA_FILE, "[]", "utf-8");
-  }
-}
-
-async function readAll(): Promise<Seller[]> {
-  await ensureFile();
-  const raw = await fs.readFile(DATA_FILE, "utf-8");
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as Seller[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeAll(sellers: Seller[]): Promise<void> {
-  await ensureFile();
-  await fs.writeFile(DATA_FILE, JSON.stringify(sellers, null, 2), "utf-8");
-}
-
 function toPublic(s: Seller): PublicSeller {
   return { id: s.id, email: s.email, createdAt: s.createdAt };
+}
+
+function rowToSeller(row: Record<string, unknown>): Seller {
+  return {
+    id: row.id as string,
+    email: row.email as string,
+    passwordHash: row.password_hash as string,
+    createdAt: row.created_at as string,
+  };
 }
 
 export function normalizeEmail(email: string): string {
@@ -48,13 +28,25 @@ export async function findSellerByEmail(
   email: string,
 ): Promise<Seller | null> {
   const norm = normalizeEmail(email);
-  const all = await readAll();
-  return all.find((s) => s.email === norm) ?? null;
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("sellers")
+    .select("*")
+    .eq("email", norm)
+    .single();
+  if (error || !data) return null;
+  return rowToSeller(data);
 }
 
 export async function findSellerById(id: string): Promise<Seller | null> {
-  const all = await readAll();
-  return all.find((s) => s.id === id) ?? null;
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("sellers")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error || !data) return null;
+  return rowToSeller(data);
 }
 
 export type CreateSellerInput = {
@@ -86,9 +78,19 @@ export async function createSeller(
     passwordHash,
     createdAt: new Date().toISOString(),
   };
-  const all = await readAll();
-  all.push(seller);
-  await writeAll(all);
+
+  const sb = createAdminClient();
+  const { error } = await sb.from("sellers").insert({
+    id: seller.id,
+    email: seller.email,
+    password_hash: seller.passwordHash,
+    created_at: seller.createdAt,
+  });
+  if (error) {
+    if (error.code === "23505") return { ok: false, error: "email_taken" };
+    throw error;
+  }
+
   return { ok: true, seller: toPublic(seller) };
 }
 

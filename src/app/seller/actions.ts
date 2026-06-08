@@ -11,6 +11,9 @@ import {
   setActiveStoreSlug,
 } from "@/lib/seller-auth";
 import { getStoreForSeller } from "@/lib/store";
+import { loginLimiter, formLimiter } from "@/lib/rate-limit";
+import { loginProtection } from "@/lib/brute-force";
+import { getClientIp } from "@/lib/get-ip";
 
 const schema = z.object({
   email: z
@@ -28,6 +31,11 @@ export type SellerAuthResult =
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
 export async function sellerSignupAction(input: unknown): Promise<SellerAuthResult> {
+  const ip = await getClientIp();
+  if (!formLimiter.check(`signup:${ip}`)) {
+    return { ok: false, error: "Too many signups. Please wait a moment." };
+  }
+
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
@@ -59,6 +67,23 @@ export async function sellerSignupAction(input: unknown): Promise<SellerAuthResu
 }
 
 export async function sellerLoginAction(input: unknown): Promise<SellerAuthResult> {
+  const ip = await getClientIp();
+  const key = `seller:${ip}`;
+
+  // Rate limit: 5 attempts per 15 min
+  if (!loginLimiter.check(key)) {
+    const retryMs = loginLimiter.retryAfter(key);
+    const retryMin = Math.ceil(retryMs / 60_000);
+    return { ok: false, error: `Too many attempts. Try again in ${retryMin} min.` };
+  }
+
+  // Brute-force lockout
+  if (loginProtection.isLocked(key)) {
+    const lockMs = loginProtection.retryAfter(key);
+    const lockMin = Math.ceil(lockMs / 60_000);
+    return { ok: false, error: `Account locked. Try again in ${lockMin} min.` };
+  }
+
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
@@ -76,19 +101,15 @@ export async function sellerLoginAction(input: unknown): Promise<SellerAuthResul
   }
   const result = await verifyPassword(parsed.data.email, parsed.data.password);
   if (!result.ok) {
-    if (result.error === "not_found") {
-      return {
-        ok: false,
-        error: "No account with that email. Sign up first.",
-        fieldErrors: { email: "No account" },
-      };
-    }
+    loginProtection.recordFailure(key);
+    // Generic error — prevents email enumeration
     return {
       ok: false,
-      error: "Wrong password.",
-      fieldErrors: { password: "Wrong password" },
+      error: "Invalid email or password.",
+      fieldErrors: { email: "Invalid credentials" },
     };
   }
+  loginProtection.recordSuccess(key);
   await createSellerSession(result.seller.id);
   return { ok: true };
 }

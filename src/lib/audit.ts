@@ -1,10 +1,6 @@
 import "server-only";
-import { promises as fs } from "fs";
-import path from "path";
 import crypto from "crypto";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const AUDIT_FILE = path.join(DATA_DIR, "audit.log");
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type AuditEvent =
   | { kind: "admin_login" }
@@ -23,41 +19,33 @@ export type AuditEntry = {
   event: AuditEvent;
 };
 
-/**
- * Append a structured event to `data/audit.log` (JSONL). Best-effort: errors
- * are swallowed so a broken audit log never blocks an admin action.
- */
 export async function appendAudit(event: AuditEvent): Promise<void> {
   try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const entry: AuditEntry = {
+    const sb = createAdminClient();
+    await sb.from("audit_log").insert({
       id: crypto.randomBytes(6).toString("hex"),
       at: new Date().toISOString(),
       event,
-    };
-    await fs.appendFile(AUDIT_FILE, JSON.stringify(entry) + "\n", "utf-8");
+    });
   } catch (err) {
     console.error("audit log failed:", err);
   }
 }
 
-/**
- * Read the last N entries (newest first). Cheap because we only need a tail
- * view of the admin overview.
- */
 export async function readRecentAudit(limit = 10): Promise<AuditEntry[]> {
   try {
-    const raw = await fs.readFile(AUDIT_FILE, "utf-8");
-    const lines = raw.split("\n").filter(Boolean);
-    const out: AuditEntry[] = [];
-    for (let i = lines.length - 1; i >= 0 && out.length < limit; i--) {
-      try {
-        out.push(JSON.parse(lines[i]) as AuditEntry);
-      } catch {
-        // skip malformed line
-      }
-    }
-    return out;
+    const sb = createAdminClient();
+    const { data, error } = await sb
+      .from("audit_log")
+      .select("*")
+      .order("at", { ascending: false })
+      .limit(limit);
+    if (error || !data) return [];
+    return data.map((row) => ({
+      id: row.id as string,
+      at: row.at as string,
+      event: row.event as AuditEvent,
+    }));
   } catch {
     return [];
   }

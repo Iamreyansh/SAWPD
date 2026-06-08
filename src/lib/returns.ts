@@ -1,11 +1,7 @@
 import "server-only";
-import { promises as fs } from "fs";
-import path from "path";
 import { randomUUID } from "crypto";
 import type { Order } from "@/types/seller";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const RETURNS_FILE = path.join(DATA_DIR, "returns.json");
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type ReturnStatus = "pending" | "approved" | "rejected" | "refunded";
 
@@ -27,51 +23,61 @@ export type ReturnRequest = {
   refundAmount: number | null;
 };
 
-async function ensureFile(file: string, fallback: unknown): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    await fs.access(file);
-  } catch {
-    await fs.writeFile(file, JSON.stringify(fallback, null, 2), "utf-8");
-  }
-}
-
-async function readAll(): Promise<ReturnRequest[]> {
-  await ensureFile(RETURNS_FILE, []);
-  const raw = await fs.readFile(RETURNS_FILE, "utf-8");
-  try {
-    const arr = JSON.parse(raw) as unknown;
-    return Array.isArray(arr) ? (arr as ReturnRequest[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeAll(items: ReturnRequest[]): Promise<void> {
-  await fs.writeFile(RETURNS_FILE, JSON.stringify(items, null, 2), "utf-8");
+function rowToReturn(row: Record<string, unknown>): ReturnRequest {
+  return {
+    id: row.id as string,
+    storeSlug: row.store_slug as string,
+    orderId: row.order_id as string,
+    productId: row.product_id as string,
+    productTitle: row.product_title as string,
+    qty: row.qty as number,
+    amountInr: row.amount_inr as number,
+    reason: row.reason as string,
+    customerName: row.customer_name as string,
+    customerPhone: row.customer_phone as string,
+    status: row.status as ReturnStatus,
+    requestedAt: row.requested_at as string,
+    decidedAt: (row.decided_at as string) ?? null,
+    decisionNote: (row.decision_note as string) ?? null,
+    refundAmount: (row.refund_amount as number) ?? null,
+  };
 }
 
 export async function listReturnsForStore(
   storeSlug: string
 ): Promise<ReturnRequest[]> {
-  const all = await readAll();
-  return all
-    .filter((r) => r.storeSlug === storeSlug)
-    .sort((a, b) => (a.requestedAt < b.requestedAt ? 1 : -1));
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("returns")
+    .select("*")
+    .eq("store_slug", storeSlug)
+    .order("requested_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map(rowToReturn);
 }
 
 export async function listReturnsForOrder(
   orderId: string
 ): Promise<ReturnRequest[]> {
-  const all = await readAll();
-  return all
-    .filter((r) => r.orderId === orderId)
-    .sort((a, b) => (a.requestedAt < b.requestedAt ? 1 : -1));
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("returns")
+    .select("*")
+    .eq("order_id", orderId)
+    .order("requested_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map(rowToReturn);
 }
 
 export async function getReturn(id: string): Promise<ReturnRequest | null> {
-  const all = await readAll();
-  return all.find((r) => r.id === id) ?? null;
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("returns")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error || !data) return null;
+  return rowToReturn(data);
 }
 
 export type CreateReturnInput = {
@@ -89,7 +95,6 @@ export type CreateReturnInput = {
 export async function addReturn(
   input: CreateReturnInput
 ): Promise<ReturnRequest> {
-  const all = await readAll();
   const req: ReturnRequest = {
     id: `ret_${randomUUID().slice(0, 8)}`,
     storeSlug: input.storeSlug,
@@ -107,8 +112,24 @@ export async function addReturn(
     decisionNote: null,
     refundAmount: null,
   };
-  all.unshift(req);
-  await writeAll(all);
+
+  const sb = createAdminClient();
+  const { error } = await sb.from("returns").insert({
+    id: req.id,
+    store_slug: req.storeSlug,
+    order_id: req.orderId,
+    product_id: req.productId,
+    product_title: req.productTitle,
+    qty: req.qty,
+    amount_inr: req.amountInr,
+    reason: req.reason,
+    customer_name: req.customerName,
+    customer_phone: req.customerPhone,
+    status: req.status,
+    requested_at: req.requestedAt,
+  });
+  if (error) throw error;
+
   return req;
 }
 
@@ -122,22 +143,27 @@ export type UpdateReturnDecisionInput = {
 export async function updateReturnStatus(
   input: UpdateReturnDecisionInput
 ): Promise<ReturnRequest | null> {
-  const all = await readAll();
-  const idx = all.findIndex((r) => r.id === input.id);
-  if (idx === -1) return null;
-  const next: ReturnRequest = {
-    ...all[idx],
+  const now = new Date().toISOString();
+  const sb = createAdminClient();
+
+  const rowPatch: Record<string, unknown> = {
     status: input.status,
-    decidedAt: new Date().toISOString(),
-    decisionNote: input.note?.trim() || all[idx].decisionNote || null,
-    refundAmount:
-      input.status === "refunded"
-        ? input.refundAmount ?? all[idx].amountInr
-        : input.refundAmount ?? all[idx].refundAmount,
+    decided_at: now,
   };
-  all[idx] = next;
-  await writeAll(all);
-  return next;
+  if (input.note) rowPatch.decision_note = input.note.trim();
+  if (input.status === "refunded") {
+    rowPatch.refund_amount = input.refundAmount ?? null;
+  } else if (input.refundAmount !== undefined) {
+    rowPatch.refund_amount = input.refundAmount;
+  }
+
+  const { error } = await sb
+    .from("returns")
+    .update(rowPatch)
+    .eq("id", input.id);
+  if (error) throw error;
+
+  return getReturn(input.id);
 }
 
 export type ReturnEligibility = {
@@ -167,11 +193,6 @@ export type CheckReturnEligibilityArgs = {
   } | null;
 };
 
-/**
- * Whether the customer with the last-7 phone digits of `customerPhoneLast7`
- * is allowed to file a return for `order`, given the store's policy and
- * current time.
- */
 export function checkReturnEligibility(
   args: CheckReturnEligibilityArgs
 ): ReturnEligibility {
@@ -180,16 +201,12 @@ export function checkReturnEligibility(
   if (!policy || !policy.enabled) {
     return { eligible: false, reason: policy ? "policy_disabled" : "no_policy", policy };
   }
-  // Only delivered / completed orders are returnable.
   if (
     order.status !== "shipped" &&
     order.status !== "completed"
   ) {
     return { eligible: false, reason: "order_not_deliverable", policy };
   }
-  // Phone match: at least 7 shared trailing digits between the order's stored
-  // phone and the submitted `customerPhoneLast7`. Same leniency the track
-  // page uses — country-code prefixes are tolerated.
   const stored = (order.customer?.phone || "").replace(/\D/g, "");
   const submitted = (customerPhoneLast7 || "").replace(/\D/g, "");
   const min = 7;
@@ -202,7 +219,6 @@ export function checkReturnEligibility(
   if (!okMatch) {
     return { eligible: false, reason: "phone_mismatch", policy };
   }
-  // Window: from `createdAt` + windowDays.
   const created = new Date(order.createdAt).getTime();
   const deadline = created + policy.windowDays * 24 * 60 * 60 * 1000;
   if (now.getTime() > deadline) {
