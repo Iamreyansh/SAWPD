@@ -8,16 +8,22 @@
 ## 0. Current state (audit)
 
 **What we have (verified working):**
-- Marketing landing: hero (text-only, no visual), how-it-works (3 steps), what-we-verify, pricing (3 plans), FAQ, final-CTA, sticky header, footer.
-- Apply form (5 sections, ~14 fields, no progress indicator, no auto-save).
-- Storefront: hero, product grid with `?tag=new|limited|sale` filter, product detail sheet, cart sheet, UPI checkout, order tracking, "Shop paused" banner, empty-state CTA.
-- Dashboard: overview (revenue cards + recent), orders (paginated, status tabs, resend, screenshot auto-check), customers (CSV, client-paged), products (CRUD, multi-image, drag-reorder), promotions (CRUD with state chips), settings (plan picker + identity + payments + hero).
-- Admin: login, overview, applications (with date filter Set 7), per-application review, stores directory (count summary).
+- Marketing landing: hero with phone mockup, stats strip, logo wall, testimonials, featured shops, comparison table, founder section, pricing, trust strip, FAQ, final-CTA, sticky header, footer with newsletter.
+- Apply form (4-step wizard with progress bar, draft persistence, CAPTCHA).
+- Storefront: hero, product grid with search + tag filter, stock urgency, product detail, cart, UPI checkout (CAPTCHA), order tracking, "Shop paused" banner, empty-state, sold ticker.
+- Dashboard: sparkline revenue chart, inventory alerts, onboarding banner, orders (paginated, status tabs, resend, screenshot auto-check), customers (CSV, LTV), products (CRUD, multi-image, draft/scheduled/archived), promotions (CRUD with state chips), returns inbox, settings (plan picker + store profile + UPI + hero + returns policy).
+- Admin: login (rate-limited + brute-force protected), overview with audit trail, applications (with date filter), per-application review, stores directory, per-store override (suspend/reactivate/plan change/email/force low-stock). All actions admin-auth-gated.
 - Multi-tenant: 2 stores seeded, `generateStaticParams` enumerated.
-- Subsystems: notifications (file-log stub), trial state, plans, payment screenshot check, billing ledger, signed-cookie auth.
+- Auth: seller accounts (bcrypt, signed cookies, ownership checks). Admin separate.
+- **Database**: Supabase PostgreSQL (10 tables, RLS, indexes, foreign keys). Supabase Storage for product images.
+- **Security**: Rate limiting on all public endpoints, brute-force protection on logins, CSP + HSTS + security headers, admin auth checks, email enumeration fix, password strength validation, env var validation, CAPTCHA scaffolded (not yet configured).
+- **Email**: Resend integration (needs API key). Falls back to console.log.
+- **Notifications**: `lib/notify.ts` sends emails for application received/decided, order placed/status-changed, trial ending, low stock, subscriber added, store email.
 
-**Critical bug found during this audit:**
-- `src/components/landing/pricing.tsx` shows **₹249/wk and ₹799/mo**, but `src/lib/plans.ts` actually charges **₹499/wk and ₹1499/mo** and writes receipts at those values. Mismatched marketing → product. Must be fixed in Set 1 below.
+**Previously critical bugs — all fixed:**
+- ~~Pricing mismatch (₹249/₹799 vs real ₹499/₹1499)~~ — fixed Set 8.
+- ~~Admin env var name leaked on login page~~ — fixed Set 19A.
+- ~~No admin auth on server actions~~ — fixed Set 23.
 
 ---
 
@@ -47,28 +53,29 @@ The current landing page is honest but visually flat. No hero visual, no social 
 ## 2. Functional gaps (across the product)
 
 ### Storefront (`/s/[slug]`)
-- No product search box (only tag filter).
+- ~~No product search box~~ — Done (Set 12).
 - No size / variant / SKU support.
-- No "only N left" stock urgency.
+- ~~No "only N left" stock urgency~~ — Done (Set 12).
 - No estimated delivery date / shipping estimator.
 - No wishlist.
 - No product reviews.
-- No "X people bought this today" social proof ticker.
+- ~~No "X people bought this today" social proof ticker~~ — Done (Set 12).
 - No Instagram feed embed or "follow me" block.
 - No order-lookup shortcut from storefront.
 
 ### Checkout
-- Single-step form (very long). No step indicator.
+- ~~Single-step form (very long). No step indicator.~~ — Not changed (single page works well for UPI).
 - No COD option (not all customers trust UPI).
 - No save-address-for-next-time (cookie exists but UX is invisible).
 - No "save my details" returning-customer detection.
+- ~~CAPTCHA~~ — Scaffolded (Set 24), pending Cloudflare setup.
 
 ### Dashboard
-- No revenue / sales chart (sparkline or area chart).
-- No inventory alerts / low-stock emails.
+- ~~No revenue / sales chart~~ — Done (Set 14, sparkline).
+- ~~No inventory alerts / low-stock emails~~ — Done (Set 14).
 - No product variants in CRUD.
-- No SEO settings (meta title/description for the storefront).
-- No draft / scheduled products.
+- ~~No SEO settings~~ — Done (Set 18/19B).
+- ~~No draft / scheduled products~~ — Done (Set 16).
 - No order internal notes (only customer-facing status).
 - No bulk actions on orders.
 - No refund / partial-refund flow.
@@ -78,26 +85,33 @@ The current landing page is honest but visually flat. No hero visual, no social 
 - No webhook to Shiprocket / Delhivery.
 
 ### Admin
-- No per-store override (suspend, refund, plan-change).
-- No email-the-applicant feature.
-- No public-facing stores directory (only admin sees it).
+- ~~No per-store override~~ — Done (Set 15).
+- ~~No email-the-applicant feature~~ — Done (Set 15).
+- ~~No public-facing stores directory~~ — Done (Set 10, `/shops`).
 - No per-store analytics.
 - No payment-overrides for trials.
 - No co-admin / staff seats.
 
 ### Application
-- One long form, no progress bar, no section nav, no auto-save.
-- No email confirmation ("we got your application").
+- ~~One long form, no progress bar, no section nav, no auto-save.~~ — Done (Set 13, 4-step wizard).
+- ~~No email confirmation~~ — Done (Set 13, surface ready for Resend).
 - No login for applicants to track status.
 - No file upload (portfolio / IG profile pic) — only text.
 
 ### Cross-cutting
-- No notifications inbox (admin/seller can't read the JSONL log).
+- ~~No notifications inbox~~ — Audit log (Set 15) + Resend emails.
 - No in-app support widget / contact form.
 - No API for headless use.
-- No audit log of admin actions.
+- ~~No audit log of admin actions~~ — Done (Set 15).
 - No webhooks out.
-- No rate limiting on public forms.
+- ~~No rate limiting on public forms~~ — Done (Set 23).
+
+### Infrastructure (new)
+- ~~No database~~ — Supabase PostgreSQL (Set 22).
+- ~~No security headers~~ — CSP, HSTS, etc. (Set 23).
+- ~~No brute-force protection~~ — Done (Set 23).
+- ~~No password strength validation~~ — Done (Set 23).
+- Cloudflare Turnstile CAPTCHA — Scaffolded (Set 24), pending configuration.
 
 ---
 
@@ -191,9 +205,12 @@ If you have a sprint, do **8 → 12 → 14 → 16** to make the *product* feel d
 ## 5. Out of scope (for now)
 
 - Real payment gateway (Razorpay). Swap point already documented.
-- Real email provider. Swap point already documented.
-- Per-seller auth. Pending.
+- ~~Real email provider~~ — Resend configured (needs API key).
+- ~~Per-seller auth~~ — Done (Set 21).
 - Tests. Pending.
 - Multi-currency (INR-only for now).
 - Mobile app / PWA install.
 - Multi-language (English-only for now).
+- ~~Database~~ — Supabase PostgreSQL connected (Set 22).
+- ~~Security hardening~~ — Done (Set 23).
+- Cloudflare Turnstile CAPTCHA — Scaffolded, pending configuration (Set 24).

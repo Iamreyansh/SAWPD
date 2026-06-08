@@ -16,7 +16,8 @@
 2. **Where**: `/Users/rey/Desktop/SAWPD`. Working dir of this opencode session. (Renamed from `m3test` on 2026-06-07.)
 3. **Status**: MVP complete + 6 polish/feature sets shipped. `pnpm typecheck` and
    `pnpm lint` both pass. **No tests yet.**
-4. **What to do next**: pick the first item under **"Next set — pick this up"**
+4. **Status**: Supabase connected (PostgreSQL + Storage). Security hardened (rate limiting, brute-force, CSP, auth checks, CAPTCHA scaffold, password validation). `pnpm typecheck` and `pnpm lint` both pass. **No tests yet.**
+5. **What to do next**: pick the first item under **"Next set — pick this up"**
    below and ship it. Update this file (change log + status) at the end.
 
 ## 1. Quick start (verification)
@@ -37,13 +38,14 @@ Admin login (set in `.env.local`):
 - **Next.js 15.1.3** (App Router, React 19, Server Components + Server Actions).
 - **TypeScript** (strict), **Tailwind 3**, **Framer Motion**, **Zustand**, **Zod**, **react-hook-form**.
 - **pnpm** workspace. Scripts: `dev`, `build`, `start`, `lint`, `typecheck`.
-- **Storage**: file-based JSON in `data/` (gitignored). No DB. No Supabase.
-- **Auth (admin)**: signed cookie `sawpd_admin`, HMAC-SHA256 with `ADMIN_SECRET`.
-- **Auth (seller)** *(Set 21)*: signed cookie `sawpd_seller` (`v1.{sellerId}.{hmac}`), bcrypt password hashes in `data/sellers.json`. 1 seller = N stores. Seller dashboard uses `getStoreForSeller(slug, seller.id)` for ownership-checked reads. Active store tracked in a separate signed cookie `sawpd_active_store`.
+- **Storage**: Supabase PostgreSQL (10 tables: sellers, stores, products, orders, promos, applications, returns, billing, subscribers, audit_log). Supabase Storage bucket `product-images` for uploads. Replaced file-based JSON in `data/` (still gitignored for local dev).
+- **Auth (admin)**: signed cookie `sawpd_admin`, HMAC-SHA256 with `ADMIN_SECRET`. Admin server actions protected by `isAdmin()` check.
+- **Auth (seller)**: signed cookie `sawpd_seller` (`v1.{sellerId}.{hmac}`), bcrypt password hashes in Supabase `sellers` table. 1 seller = N stores. Seller dashboard uses `getStoreForSeller(slug, seller.id)` for ownership-checked reads. Active store tracked in a separate signed cookie `sawpd_active_store`.
+- **Security**: Rate limiting (in-memory sliding window) on all public endpoints. Brute-force protection on logins (5 fails → 15 min lock). CSP + HSTS + nosniff + X-Frame-Options headers. Password strength validation. Email enumeration fixed. Supabase env vars validated at startup.
+- **CAPTCHA**: Cloudflare Turnstile scaffolded (`src/components/ui/turnstile.tsx`). Invisible widget, skips if `TURNSTILE_SECRET_KEY` not set. Applied to checkout, apply form, and seller signup. **Not yet configured** — user deferred Cloudflare setup to next session.
 - **Payment**: no gateway. UPI QR generated client-side via `qrcode`. Owner manually
   verifies screenshots.
-- **Email**: stubbed. `lib/notify.ts#deliver()` writes to `data/notifications.log`
-  (rolling 200-line cap) + `console.log`. Replace with Resend/Postmark/SES later.
+- **Email**: Resend integration in `lib/notify.ts`. Requires `RESEND_API_KEY` + `EMAIL_FROM` env vars. Falls back to `console.log` if not configured.
 
 ## 3. Surfaces (every route in the app)
 
@@ -88,38 +90,48 @@ The `kabir` store has no products — visiting `/s/kabir` shows the empty-state
 ## 5. Architecture (subsystems, where they live)
 
 ### 5.1 Data layer (`src/lib/*` — single source of truth)
-- `lib/store.ts` — `getStore`, `listStores`, `getFirstStore`, `updateStore`, plus
+- `lib/store.ts` — Supabase `stores` + `billing` tables. `getStore`, `listStores`, `getFirstStore`, `updateStore`, plus
   billing (`activatePlanMock`, `listBillingForStore`).
-- `lib/products.ts` — list/get/add/update/delete products. `MAX_PRODUCT_IMAGES = 6`.
-- `lib/orders.ts` — list/get/add orders. Status transitions set
+- `lib/products.ts` — Supabase `products` table. list/get/add/update/delete products. `MAX_PRODUCT_IMAGES = 6`.
+- `lib/orders.ts` — Supabase `orders` table. list/get/add orders. Status transitions set
   `verifiedAt`/`shippedAt`/`completedAt`/`cancelledAt`/`resendRequestedAt` as
   appropriate.
-- `lib/promos.ts` — CRUD, state machine (`getPromoState` returns
+- `lib/promos.ts` — Supabase `promos` table. CRUD, state machine (`getPromoState` returns
   `active|paused|scheduled|expired|exhausted`), `computeDiscount`,
   `validatePromo` (read-only) and `applyPromo` (increments `usageCount`).
-- `lib/applications.ts` — list/get/add/decide. Approval sets
+- `lib/applications.ts` — Supabase `applications` table. list/get/add/decide. Approval sets
   `trialEndsAt = now + 14d`.
-- `lib/customers.ts` — `aggregateCustomers(orders)` and CSV serializers.
+- `lib/customers.ts` — `aggregateCustomers(orders)` and CSV serializers (reads from orders table).
 - `lib/trial.ts` — `getTrialState`, `isStoreOpen` (single source of truth for
   store open/closed).
 - `lib/plans.ts` — `PlanId`, pricing (₹499/wk, ₹1499/mo), renewal helper.
-- `lib/notify.ts` — `notifyApplicationReceived/Decided`, `notifyOrderPlaced`,
-  `notifyOrderStatusChanged`, `notifyTrialEnding`. Persists to
-  `data/notifications.log`.
+- `lib/notify.ts` — Resend email provider. `notifyApplicationReceived/Decided`, `notifyOrderPlaced`,
+  `notifyOrderStatusChanged`, `notifyTrialEnding`, `notifyStoreEmail`, `notifyLowStock`, `notifySubscriberAdded`.
 - `lib/payment-check.ts` — `checkPaymentScreenshot` (MIME/size heuristic).
 - `lib/stores.ts` — `listStoreSummaries`, `listStoreSlugs` (multi-tenant).
 - `lib/whatsapp.ts` — `buildWhatsAppLink`, `ownerContactMessage`.
 - `lib/address-memory.ts` — cookie-backed last-used address.
-- `lib/uploads.ts` — local file upload to `public/uploads/`.
+- `lib/uploads.ts` — Supabase Storage (`product-images` bucket). Upload/delete via service_role.
 - `lib/admin-auth.ts` — cookie sign/verify, `isAdmin`, `checkPassword`.
+- `lib/seller-auth.ts` — signed cookie `sawpd_seller`, `getCurrentSeller`, `requireSeller`.
+- `lib/sellers.ts` — Supabase `sellers` table. bcrypt password hashes, `findSellerByEmail`, `findSellerById`, `createSeller`, `verifyPassword`.
+- `lib/supabase/` — `client.ts` (browser), `server.ts` (cookies-based), `admin.ts` (service_role).
+- `lib/rate-limit.ts` — In-memory sliding-window rate limiter. `loginLimiter`, `checkoutLimiter`, `formLimiter`, `trackLimiter`.
+- `lib/brute-force.ts` — Login attempt tracking + lockout. `loginProtection`.
+- `lib/sanitize.ts` — HTML entity escaping + input sanitization.
+- `lib/get-ip.ts` — Client IP extraction from request headers.
+- `lib/env.ts` — Runtime validation for required env vars (Supabase keys).
+- `lib/captcha.ts` — Turnstile CAPTCHA verification helper.
+- `lib/password.ts` — Password strength validation (rejects common/weak passwords).
 
 ### 5.2 Server actions
-- `src/app/apply/actions.ts` — `submitApplication`.
-- `src/app/admin/actions.ts` — `loginAction`, `logoutAction`, `decideAction`.
+- `src/app/apply/actions.ts` — `submitApplication`. Rate-limited (3/min), CAPTCHA-verified.
+- `src/app/admin/actions.ts` — `loginAction` (rate-limited + brute-force protected), `logoutAction`, `decideAction` (admin-auth-gated), `emailApplicantAction`, `suspendStoreAction`, `reactivateStoreAction`, `changeStorePlanAction`, `adminForceLowStockAction` (all admin-auth-gated).
 - `src/app/dashboard/actions.ts` — product CRUD, order status updates, store
-  settings, promo CRUD, **`choosePlanAction`**, **`requestResendAction`**.
-- `src/app/s/[slug]/checkout/actions.ts` — `validatePromoAction`, `placeOrder`.
-- `src/app/track/actions.ts` — `trackOrderAction` (public, ID + last-7 phone).
+  settings, promo CRUD, **`choosePlanAction`**, **`requestResendAction`**. All seller-auth-gated via `assertOwnsStore`.
+- `src/app/s/[slug]/checkout/actions.ts` — `validatePromoAction`, `placeOrder`. Rate-limited (3/min), CAPTCHA-verified.
+- `src/app/seller/actions.ts` — `sellerSignupAction` (rate-limited, CAPTCHA, password strength), `sellerLoginAction` (rate-limited + brute-force protected), `sellerLogoutAction`, `setActiveStoreAction`.
+- `src/app/track/actions.ts` — `trackOrderAction` (rate-limited 10/min), `requestReturnAction` (rate-limited 3/min).
 
 ### 5.3 Stores (Zustand, client)
 - `src/store/cart-store.ts` — items, hydrated flag (load from localStorage).
@@ -154,21 +166,15 @@ The `kabir` store has no products — visiting `/s/kabir` shows the empty-state
 
 ## 7. Next set — pick this up
 
-The Sets 8–20 plan is the active queue (see `PLAN.md`). Sets 19A–19F + 20 (folder rename) + 21 (per-seller auth) are all done. Next: **#3 Resend email provider** (small, ~1 hour) — install `resend`, add `RESEND_API_KEY` to `.env.local` template, swap `lib/notify.ts#deliver()` from `console.log` to `resend.emails.send()`. Add React Email templates for `notifyApplicationReceived` and `notifyStoreEmail`. Verify with Resend's test domain first.
+The Sets 8–20 plan is the active queue (see `PLAN.md`). Sets 19A–19F + 20 (folder rename) + 21 (per-seller auth) are all done. **Supabase migration + security hardening** done (see Change log below). Next:
 
-After that: **#5 Vitest** (medium, ~1 day) — install `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`. Add `vitest.config.ts` + `vitest.setup.ts`. First test suite: `lib/promos.ts` (pure logic) + `lib/applications.ts` (FS, use `memfs`). Add `pnpm test` script + CI-lite via `pnpm typecheck && pnpm lint && pnpm test`.
+1. **Cloudflare Turnstile CAPTCHA** — scaffolded but not configured. User deferred to next session. Add `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` to Vercel env vars once Cloudflare account is set up. The `TurnstileWidget` component and `requireCaptcha` helper are already wired into checkout, apply, and signup.
+2. **Resend email provider** (small, ~1 hour) — `lib/notify.ts` already uses Resend. Just needs `RESEND_API_KEY` + `EMAIL_FROM` env vars on Vercel. Verify domain at resend.com/domains first.
+3. **Vitest** (medium, ~1 day) — install `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`. Add `vitest.config.ts` + `vitest.setup.ts`. First test suite: `lib/promos.ts` (pure logic) + `lib/trial.ts`. Add `pnpm test` script.
+4. **Razorpay** (medium, ~1 day) — deferred per user. Replace `lib/store.ts#activatePlanMock` with real checkout.
+5. **Rate limiter persistence** — swap in-memory rate limiter for Upstash Redis when scaling to multiple instances.
 
-Then: **#6 customer phone-OTP** (medium, ~1 day) — SMS provider decision pending (MSG91 vs Twilio vs email-the-OTP). Parked for v1.1; depends on Resend being live.
-
-Deferred: **#4 Razorpay** (the user explicitly said "1 2 3 5 6" — Razorpay is not in the next-3). When we get to it: replace `lib/store.ts#activatePlanMock` with a real checkout, add `app/api/razorpay/webhook/route.ts` to flip `store.plan` on successful subscription, verify HMAC signature.
-
-Beyond the plan:
-
-1. ~~**Per-seller auth**~~ (DONE 2026-06-07 in Set 21) — see Change log.
-2. **Real email provider** (small, ~1 hour) — Resend. Swap point: `lib/notify.ts#deliver()`.
-3. **Real payment gateway — Razorpay** (medium, ~1 day) — deferred per user.
-4. **Tests** (ongoing, ~2 days for full coverage) — Vitest. Start with `lib/trial.ts`, `lib/promos.ts`, `lib/payment-check.ts` (pure logic).
-5. **Build artefacts cleanup** (trivial, ~5 min) — Delete `.next/` and `tsconfig.tsbuildinfo` from working dir. They regenerate.
+Deferred: **customer phone-OTP** (medium, ~1 day) — SMS provider decision pending. Parked for v1.1; depends on Resend being live.
 
 When you finish a set, append a new entry under **Change log** and bump the
 remaining items in this section.
@@ -178,6 +184,57 @@ Sets 8+ are plan-driven work, not TODO. After completing a set, append a Change
 log entry and mark it done in PLAN.md.
 
 ## 8. Change log
+
+- **Set 22 (2026-06-09) — Supabase migration**
+  - Installed `@supabase/supabase-js` + `@supabase/ssr`.
+  - Created `src/lib/supabase/client.ts` (browser), `server.ts` (cookies), `admin.ts` (service_role).
+  - Created `supabase/migrations/001_initial_schema.sql` — 10 tables (sellers, stores, products, orders, promos, applications, returns, billing, subscribers, audit_log), enums, indexes, foreign keys, RLS policies, storage bucket.
+  - Created `supabase/migrations/002_seed_data.sql` — template for data migration.
+  - Rewrote all 9 data layer files to use Supabase queries instead of `data/*.json`:
+    - `lib/sellers.ts` → `sellers` table
+    - `lib/store.ts` → `stores` + `billing` tables
+    - `lib/products.ts` → `products` table
+    - `lib/orders.ts` → `orders` table
+    - `lib/promos.ts` → `promos` table
+    - `lib/applications.ts` → `applications` table
+    - `lib/returns.ts` → `returns` table
+    - `lib/audit.ts` → `audit_log` table
+    - `lib/subscribe.ts` → `subscribers` table
+  - Rewrote `lib/uploads.ts` to use Supabase Storage (`product-images` bucket).
+  - Updated `next.config.ts` to allow `*.supabase.co` images.
+  - Updated `.env.example` + `.env.local` with Supabase keys.
+  - Created `lib/env.ts` — runtime validation for required env vars.
+  - `pnpm typecheck` + `pnpm lint` pass.
+
+- **Set 23 (2026-06-09) — Security hardening**
+  - **Rate limiting** (`lib/rate-limit.ts`): In-memory sliding-window rate limiter. Applied to all public endpoints:
+    - Admin login: 5/15min
+    - Seller login: 5/15min
+    - Seller signup: 3/min
+    - Checkout: 3/min
+    - Application form: 3/min
+    - Order tracking: 10/min
+    - Return requests: 3/min
+    - Newsletter subscribe: 3/min
+  - **Brute-force protection** (`lib/brute-force.ts`): Login attempt tracking. 5 failures → 15 min lockout. Applied to admin + seller login.
+  - **Security headers** (`next.config.ts`): CSP, HSTS (2 years), nosniff, SAMEORIGIN, XSS protection, Referrer-Policy, Permissions-Policy.
+  - **Admin auth checks**: Added `isAdmin()` to all 6 admin server actions (decide, email, suspend, reactivate, change plan, force low-stock). Server actions are POST endpoints callable by anyone — without auth checks, unauthenticated users could approve applications, suspend stores, and send emails.
+  - **Email enumeration fix**: Seller login now returns generic "Invalid email or password" for both wrong-email and wrong-password cases.
+  - **Password strength validation** (`lib/password.ts`): Requires uppercase + lowercase + number, rejects common passwords, rejects sequential/repeated characters.
+  - **Client IP extraction** (`lib/get-ip.ts`): Gets IP from `x-forwarded-for` / `x-real-ip` headers for rate limiting.
+  - **Input sanitization** (`lib/sanitize.ts`): HTML entity escaping + control character stripping.
+  - **Supabase env var validation** (`lib/env.ts`): Replaced `process.env.X!` with validated accessors that throw clear errors.
+  - **Seller query optimization**: `findSellerById` now selects only `id, email, created_at` (no password hash) for session lookups.
+  - `pnpm typecheck` + `pnpm lint` pass.
+
+- **Set 24 (2026-06-09) — CAPTCHA scaffold**
+  - Installed `turnstile` package.
+  - Created `src/components/ui/turnstile.tsx` — Cloudflare Turnstile widget (invisible, auto-loads script, renders container). `verifyTurnstile()` for server-side verification.
+  - Created `lib/captcha.ts` — `requireCaptcha()` helper. Skips if `TURNSTILE_SECRET_KEY` not set (dev mode).
+  - Wired CAPTCHA into checkout (`placeOrder`), application form (`submitApplication`), and seller signup (`sellerSignupAction`).
+  - Updated `.env.example` with `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY`.
+  - **Not yet configured** — user deferred Cloudflare account setup to next session. CAPTCHA is optional; app works without it.
+  - `pnpm typecheck` + `pnpm lint` pass.
 
 - **Set 1 (2026-06-06) — Cleanup**
   - Deleted empty stubs: `src/supabase/`, `src/components/layout/`.
@@ -397,10 +454,11 @@ log entry and mark it done in PLAN.md.
 
 ## 9. Open questions / future decisions
 
-- **Email provider**: Resend recommended. Swap point: `lib/notify.ts#deliver()`.
+- **Email provider**: Resend configured. Needs `RESEND_API_KEY` + `EMAIL_FROM` on Vercel.
 - **Payment gateway**: Razorpay recommended for India. Swap point: `lib/store.ts#activatePlanMock`.
-- **Image storage**: Local (`public/uploads/`) is MVP. For prod, swap to Supabase Storage / S3.
-- **Per-seller auth**: Pending (see Next set, item 2).
+- **Image storage**: Supabase Storage (`product-images` bucket) — done.
+- **CAPTCHA**: Cloudflare Turnstile scaffolded. Needs Cloudflare account + env vars on Vercel.
+- **Rate limiter persistence**: In-memory is fine for single-instance. Swap to Upstash Redis for horizontal scaling.
 
 ---
 
