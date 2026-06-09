@@ -97,6 +97,23 @@ export async function addOrder(input: CreateOrderInput): Promise<Order> {
   });
   if (error) throw error;
 
+  // Decrement stock for each line item (atomic per product)
+  for (const line of order.lines) {
+    // Read current stock
+    const { data: product } = await sb
+      .from("products")
+      .select("stock_count")
+      .eq("id", line.productId)
+      .single();
+    if (product) {
+      const newStock = Math.max(0, (product.stock_count as number) - line.qty);
+      await sb
+        .from("products")
+        .update({ stock_count: newStock })
+        .eq("id", line.productId);
+    }
+  }
+
   return order;
 }
 
