@@ -95,6 +95,12 @@ export async function placeOrder(
         "This shop is currently paused. Please contact the seller directly.",
     };
   }
+  if (!store.upiId || store.upiId.trim() === "" || store.upiId === "your-upi@bank") {
+    return {
+      ok: false,
+      error: "This shop hasn't configured UPI payments yet. Please check back later.",
+    };
+  }
 
   // Server-side price validation: verify prices match DB
   const dbProducts = await listProductsForStore(data.storeSlug);
