@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentSeller } from "@/lib/seller-auth";
 import { LoginForm } from "./login-form";
+import { Logo } from "@/components/ui/logo";
 
 export const metadata = {
   title: "Log in — SAWPD",
@@ -15,14 +16,7 @@ export default async function SellerLoginPage() {
     <div className="min-h-screen bg-bone">
       <header className="border-b border-ink/[0.06] bg-bone/95 backdrop-blur-md">
         <div className="container-editorial flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-bone font-bold tracking-tight text-sm">
-              S
-            </span>
-            <span className="text-[15px] font-semibold tracking-[-0.02em] text-ink">
-              SAWPD
-            </span>
-          </Link>
+          <Logo invert />
           <Link
             href="/seller/signup"
             className="text-[13.5px] font-semibold text-ink/65 transition-colors hover:text-ink"
@@ -42,6 +36,17 @@ export default async function SellerLoginPage() {
           </p>
           <div className="mt-10">
             <LoginForm />
+          </div>
+          <div className="mt-8 rounded-2xl border border-ink/10 bg-bone p-6 text-center">
+            <p className="text-[14px] text-ink/60">
+              Don&apos;t have an account yet?
+            </p>
+            <Link
+              href="/seller/signup"
+              className="mt-3 inline-flex h-11 items-center justify-center rounded-full border border-ink/15 bg-bone px-6 text-[14px] font-semibold text-ink transition-all hover:bg-ink/[0.04] active:scale-[0.98]"
+            >
+              Create an account
+            </Link>
           </div>
         </div>
       </main>

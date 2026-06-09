@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentSeller } from "@/lib/seller-auth";
 import { SignupForm } from "./signup-form";
+import { Logo } from "@/components/ui/logo";
 
 export const metadata = {
   title: "Create your seller account — SAWPD",
@@ -16,14 +17,7 @@ export default async function SellerSignupPage() {
     <div className="min-h-screen bg-bone">
       <header className="border-b border-ink/[0.06] bg-bone/95 backdrop-blur-md">
         <div className="container-editorial flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-bone font-bold tracking-tight text-sm">
-              S
-            </span>
-            <span className="text-[15px] font-semibold tracking-[-0.02em] text-ink">
-              SAWPD
-            </span>
-          </Link>
+          <Logo invert />
           <Link
             href="/seller/login"
             className="text-[13.5px] font-semibold text-ink/65 transition-colors hover:text-ink"

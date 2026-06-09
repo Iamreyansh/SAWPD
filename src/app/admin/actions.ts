@@ -19,6 +19,8 @@ import { listProductsForStore } from "@/lib/products";
 import { loginLimiter } from "@/lib/rate-limit";
 import { loginProtection } from "@/lib/brute-force";
 import { getClientIp } from "@/lib/get-ip";
+import { deleteUploadIfLocal } from "@/lib/uploads";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 async function requireAdmin(): Promise<boolean> {
   return isAdmin();
@@ -314,4 +316,98 @@ export async function adminForceLowStockAction(storeSlug: string): Promise<Force
     products: flagged,
   });
   return { ok: true, count: flagged.length };
+}
+
+// ---------- Hard delete ----------
+
+const deleteStoreSchema = z.object({
+  storeSlug: z.string().min(1),
+  confirm: z.literal("DELETE"),
+});
+
+export type DeleteStoreResult = { ok: true } | { ok: false; error: string };
+
+export async function deleteStoreAction(input: unknown): Promise<DeleteStoreResult> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: "Unauthorized." };
+  }
+  const parsed = deleteStoreSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "Type DELETE to confirm." };
+  }
+  const store = await getStore(parsed.data.storeSlug);
+  if (!store) return { ok: false, error: "Store not found." };
+
+  const sb = createAdminClient();
+
+  // Delete products and their images
+  const products = await listProductsForStore(store.slug);
+  for (const p of products) {
+    for (const img of p.images) {
+      await deleteUploadIfLocal(img.url);
+    }
+  }
+  await sb.from("products").delete().eq("store_slug", store.slug);
+
+  // Delete orders
+  await sb.from("orders").delete().eq("store_slug", store.slug);
+
+  // Delete promos
+  await sb.from("promos").delete().eq("store_slug", store.slug);
+
+  // Delete billing
+  await sb.from("billing").delete().eq("store_slug", store.slug);
+
+  // Delete returns
+  await sb.from("returns").delete().eq("store_slug", store.slug);
+
+  // Delete the store
+  await sb.from("stores").delete().eq("slug", store.slug);
+
+  await appendAudit({
+    kind: "store_deleted",
+    storeSlug: store.slug,
+    storeName: store.name,
+  });
+  revalidatePath("/admin");
+  revalidatePath("/admin/stores");
+  revalidatePath(`/s/${store.slug}`);
+  return { ok: true };
+}
+
+const deleteApplicationSchema = z.object({
+  applicationId: z.string().min(1),
+  confirm: z.literal("DELETE"),
+});
+
+export type DeleteApplicationResult = { ok: true } | { ok: false; error: string };
+
+export async function deleteApplicationAction(
+  input: unknown
+): Promise<DeleteApplicationResult> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: "Unauthorized." };
+  }
+  const parsed = deleteApplicationSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "Type DELETE to confirm." };
+  }
+  const app = await getApplication(parsed.data.applicationId);
+  if (!app) return { ok: false, error: "Application not found." };
+
+  const sb = createAdminClient();
+  const { error } = await sb
+    .from("applications")
+    .delete()
+    .eq("id", parsed.data.applicationId);
+  if (error) return { ok: false, error: error.message };
+
+  await appendAudit({
+    kind: "application_deleted",
+    applicationId: app.id,
+    storeName: app.storeName,
+  });
+  revalidatePath("/admin");
+  revalidatePath("/admin/applications");
+  return { ok: true };
 }

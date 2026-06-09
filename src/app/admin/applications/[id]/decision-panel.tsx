@@ -2,10 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, Loader2 } from "lucide-react";
+import { Check, X, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { decideAction } from "@/app/admin/actions";
+import { Input } from "@/components/ui/input";
+import { decideAction, deleteApplicationAction } from "@/app/admin/actions";
 
 export function DecisionPanel({ applicationId }: { applicationId: string }) {
   const router = useRouter();
@@ -13,6 +14,8 @@ export function DecisionPanel({ applicationId }: { applicationId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [reviewerNote, setReviewerNote] = useState("");
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
 
   const approve = () => {
     setError(null);
@@ -46,6 +49,21 @@ export function DecisionPanel({ applicationId }: { applicationId: string }) {
         setError(result.error);
       } else {
         router.refresh();
+      }
+    });
+  };
+
+  const onDelete = () => {
+    setError(null);
+    startTransition(async () => {
+      const result = await deleteApplicationAction({
+        applicationId,
+        confirm: deleteConfirm,
+      });
+      if (!result.ok) {
+        setError(result.error);
+      } else {
+        router.push("/admin/applications");
       }
     });
   };
@@ -134,6 +152,64 @@ export function DecisionPanel({ applicationId }: { applicationId: string }) {
             </>
           )}
         </div>
+      </div>
+
+      <div className="mt-6 border-t border-ink/10 pt-5">
+        {showDelete ? (
+          <div className="space-y-3">
+            <p className="text-[13px] text-ink/70">
+              This will permanently delete this application. This cannot be undone.
+            </p>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/60">
+                Type <span className="font-mono text-vermillion">DELETE</span> to confirm
+              </label>
+              <Input
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                placeholder="DELETE"
+                className="mt-1 font-mono"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowDelete(false);
+                  setDeleteConfirm("");
+                }}
+                disabled={pending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="vermillion"
+                size="sm"
+                onClick={onDelete}
+                disabled={pending || deleteConfirm !== "DELETE"}
+              >
+                {pending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" strokeWidth={2.25} />
+                )}
+                Permanently delete
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowDelete(true)}
+            className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-ink/40 transition-colors hover:text-vermillion"
+          >
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+            Delete application
+          </button>
+        )}
       </div>
     </section>
   );

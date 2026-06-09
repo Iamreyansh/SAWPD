@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { updateStoreAction } from "@/app/dashboard/actions";
+import { updateStoreAction, uploadHeroImageAction } from "@/app/dashboard/actions";
 import type { SellerStore } from "@/types/seller";
 
 const formSchema = z.object({
@@ -32,11 +32,14 @@ export function SettingsForm({ store }: { store: SellerStore }) {
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     register,
     handleSubmit,
     watch,
+    setValue,
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -51,6 +54,25 @@ export function SettingsForm({ store }: { store: SellerStore }) {
       heroHeadline: store.heroHeadline.join("\n"),
     },
   });
+
+  const heroImageUrl = watch("heroImage");
+
+  async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    const formData = new FormData();
+    formData.append("file", file);
+    const result = await uploadHeroImageAction(formData);
+    setUploading(false);
+    if (result.ok) {
+      setValue("heroImage", result.url, { shouldValidate: true });
+    } else {
+      setError(result.error);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   const onSubmit = (data: FormValues) => {
     setError(null);
@@ -133,13 +155,39 @@ export function SettingsForm({ store }: { store: SellerStore }) {
         </div>
         <div className="mt-4">
           <Field
-            label="Hero image URL"
+            label="Hero image"
             error={fieldErrors.heroImage}
-            hint="Use a 4:5 or 5:4 portrait photo (1200×1600 or larger). Try Unsplash, your own CDN, or a product shot."
+            hint="Upload a 4:5 or 5:4 portrait photo (1200×1600 or larger)."
           >
-            <Input {...register("heroImage")} />
+            <div className="flex items-center gap-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={onFileChange}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading || pending}
+              >
+                {uploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" strokeWidth={2} />
+                )}
+                {uploading ? "Uploading…" : "Upload image"}
+              </Button>
+              <Input {...register("heroImage")} className="flex-1 font-mono text-[12px]" />
+            </div>
           </Field>
-          <HeroImagePreview url={watch("heroImage")} />
+          <HeroImagePreview
+            url={heroImageUrl}
+            onClear={() => setValue("heroImage", "", { shouldValidate: true })}
+          />
         </div>
       </Section>
 
@@ -193,7 +241,7 @@ function Section({
   );
 }
 
-function HeroImagePreview({ url }: { url: string }) {
+function HeroImagePreview({ url, onClear }: { url: string; onClear?: () => void }) {
   if (!url) {
     return (
       <div className="mt-3 flex h-32 w-32 items-center justify-center rounded-xl border border-dashed border-ink/15 bg-ink/[0.02] text-[11px] text-ink/40">
@@ -221,6 +269,15 @@ function HeroImagePreview({ url }: { url: string }) {
             (e.target as HTMLImageElement).style.opacity = "0";
           }}
         />
+        {onClear && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-ink/70 text-bone transition-colors hover:bg-ink"
+          >
+            <X className="h-3 w-3" strokeWidth={2.5} />
+          </button>
+        )}
       </div>
       <p className="text-[11.5px] text-ink/45">Preview · saved on submit</p>
     </div>

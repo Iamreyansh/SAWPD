@@ -1,10 +1,3 @@
-import Link from "next/link";
-
-const facts = [
-  { value: "200+", label: "creators in 14 cities" },
-  { value: "₹40L+", label: "paid to creators in 2025" },
-];
-
 export function Founder() {
   return (
     <section className="container-editorial py-24 md:py-32">
@@ -45,24 +38,6 @@ export function Founder() {
               customer, the money, and your evenings back.
             </p>
           </div>
-          <div className="mt-8 grid grid-cols-2 gap-6">
-            {facts.map((f) => (
-              <div key={f.label} className="rounded-2xl border border-ink/10 bg-bone p-5">
-                <p className="text-3xl font-extrabold tracking-[-0.04em] text-ink md:text-4xl">
-                  {f.value}
-                </p>
-                <p className="mt-1 text-[12px] font-medium uppercase tracking-[0.12em] text-ink/55">
-                  {f.label}
-                </p>
-              </div>
-            ))}
-          </div>
-          <Link
-            href="/about"
-            className="mt-8 inline-flex text-[13.5px] font-semibold text-vermillion hover:underline"
-          >
-            Read the longer story →
-          </Link>
         </div>
       </div>
     </section>

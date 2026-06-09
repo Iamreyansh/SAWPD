@@ -11,7 +11,7 @@ import {
 import { getOrder, updateOrderStatus } from "@/lib/orders";
 import { activatePlanMock, getActiveStoreForSeller, getStoreForSeller, updateStore } from "@/lib/store";
 import { requireSeller } from "@/lib/seller-auth";
-import { deleteUploadIfLocal, uploadProductImage } from "@/lib/uploads";
+import { deleteUploadIfLocal, uploadProductImage, uploadHeroImage } from "@/lib/uploads";
 import { MAX_PRODUCT_IMAGES } from "@/types/storefront";
 import type { ProductImage } from "@/types/storefront";
 import {
@@ -184,6 +184,19 @@ export async function uploadProductImageAction(
     return { ok: false, error: "No file received." };
   }
   return uploadProductImage(file);
+}
+
+export async function uploadHeroImageAction(
+  formData: FormData
+): Promise<
+  | { ok: true; url: string; filename: string }
+  | { ok: false; error: string }
+> {
+  const file = formData.get("file");
+  if (!(file instanceof File)) {
+    return { ok: false, error: "No file received." };
+  }
+  return uploadHeroImage(file);
 }
 
 const orderStatusSchema = z.object({

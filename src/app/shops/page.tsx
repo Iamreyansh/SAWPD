@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, Hourglass } from "lucide-react";
 import { listStoreSummaries } from "@/lib/stores";
+import { Logo } from "@/components/ui/logo";
 
 export const metadata = {
   title: "Live shops — SAWPD",
@@ -20,14 +21,7 @@ export default async function ShopsPage() {
     <div className="min-h-screen bg-bone">
       <header className="border-b border-ink/[0.06] bg-bone/95 backdrop-blur-md">
         <div className="container-editorial flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-bone font-bold tracking-tight text-sm">
-              S
-            </span>
-            <span className="text-[15px] font-semibold tracking-[-0.02em] text-ink">
-              SAWPD
-            </span>
-          </Link>
+          <Logo invert />
           <Link
             href="/apply"
             className="inline-flex h-10 items-center justify-center rounded-full bg-vermillion px-5 text-[13.5px] font-semibold text-bone transition-all hover:bg-vermillion-deep active:scale-[0.98] shadow-glow"

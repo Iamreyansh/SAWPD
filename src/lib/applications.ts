@@ -57,8 +57,22 @@ export async function addApplication(
   options?: { sellerId?: string }
 ): Promise<Application> {
   const app: Application = {
-    ...input,
     id: `app_${randomUUID().slice(0, 8)}`,
+    fullName: input.fullName,
+    instagramHandle: input.instagramHandle,
+    email: input.email,
+    phone: input.phone,
+    storeName: input.storeName || "TBD",
+    niche: input.niche || "other",
+    followerCount: input.followerCount ?? 0,
+    salesCadence: input.salesCadence || "weekly",
+    salesCount: input.salesCount ?? 0,
+    averageOrderValue: input.averageOrderValue ?? 0,
+    currentSetup: input.currentSetup || "",
+    websiteUrl: input.websiteUrl || undefined,
+    topProducts: input.topProducts || "",
+    referralSource: input.referralSource || "",
+    motivation: input.motivation || "",
     createdAt: new Date().toISOString(),
     status: "pending",
     ...(options?.sellerId ? { sellerId: options.sellerId } : {}),

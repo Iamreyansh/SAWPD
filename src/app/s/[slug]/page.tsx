@@ -50,25 +50,40 @@ export default async function StorefrontPage({
   const orders = await listOrders(slug);
   const isOpen = isStoreOpen(store);
 
-  return (
-    <>
-      <StorefrontHeader store={store} />
-      {!isOpen && (
-        <div className="border-b border-vermillion/20 bg-vermillion/[0.04]">
-          <div className="container-editorial flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-[12.5px] text-ink md:px-10">
-            <p>
-              <span className="font-semibold text-vermillion">Shop paused.</span>{" "}
-              New orders are temporarily off while the seller renews their plan.
+  if (!isOpen) {
+    return (
+      <>
+        <StorefrontHeader store={store} />
+        <main className="flex min-h-[60vh] flex-col items-center justify-center px-5 py-20 text-center">
+          <div className="mx-auto max-w-md">
+            <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-vermillion/10">
+              <svg className="h-7 w-7 text-vermillion" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+            </div>
+            <h1 className="display-m text-ink">Shop paused</h1>
+            <p className="mt-4 text-[15px] leading-relaxed text-ink/60">
+              This shop is temporarily closed. The seller is renewing their plan
+              or making updates.
             </p>
             <Link
               href={`https://instagram.com/${store.ownerHandle.replace("@", "")}`}
-              className="font-semibold text-vermillion underline underline-offset-4 hover:opacity-80"
+              className="mt-6 inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3 text-[14px] font-semibold text-bone transition-colors hover:bg-ink/90"
             >
-              DM on Instagram instead →
+              DM on Instagram
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+              </svg>
             </Link>
           </div>
-        </div>
-      )}
+        </main>
+        <StorefrontFooter store={store} orders={orders} />
+      </>
+    );
+  }
+  return (
+    <>
+      <StorefrontHeader store={store} />
       <main>
         <Hero
           kicker={store.heroKicker}
@@ -86,7 +101,7 @@ export default async function StorefrontPage({
         )}
       </main>
       <StorefrontFooter store={store} orders={orders} />
-      {isOpen && <CartSheet products={products} storeSlug={store.slug} />}
+      <CartSheet products={products} storeSlug={store.slug} />
       <ProductDetailSheet products={products} />
     </>
   );

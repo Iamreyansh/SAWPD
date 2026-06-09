@@ -7,8 +7,10 @@ export type AuditEvent =
   | { kind: "admin_logout" }
   | { kind: "application_decided"; applicationId: string; storeName: string; decision: "approved" | "rejected" }
   | { kind: "application_emailed"; applicationId: string; storeName: string; subject: string }
+  | { kind: "application_deleted"; applicationId: string; storeName: string }
   | { kind: "store_suspended"; storeSlug: string; storeName: string; reason?: string }
   | { kind: "store_reactivated"; storeSlug: string; storeName: string }
+  | { kind: "store_deleted"; storeSlug: string; storeName: string }
   | { kind: "store_plan_changed"; storeSlug: string; storeName: string; fromPlan: string | null; toPlan: "weekly" | "monthly" | "none" }
   | { kind: "return_requested"; storeSlug: string; returnId: string; orderId: string; productTitle: string; qty: number }
   | { kind: "return_decided"; storeSlug: string; returnId: string; orderId: string; decision: "approved" | "rejected" | "refunded" };
@@ -62,10 +64,14 @@ export function describeAuditEvent(entry: AuditEntry): string {
       return `Application ${e.decision} · ${e.storeName}`;
     case "application_emailed":
       return `Emailed applicant · ${e.storeName} · "${e.subject}"`;
+    case "application_deleted":
+      return `Deleted application · ${e.storeName}`;
     case "store_suspended":
       return `Suspended ${e.storeName}${e.reason ? ` · ${e.reason}` : ""}`;
     case "store_reactivated":
       return `Reactivated ${e.storeName}`;
+    case "store_deleted":
+      return `Deleted store · ${e.storeName}`;
     case "store_plan_changed":
       return `Plan changed · ${e.storeName} · ${e.fromPlan ?? "none"} → ${e.toPlan}`;
     case "return_requested":

@@ -9,15 +9,18 @@ import {
   Check,
   Mail,
   ShoppingBag,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
   suspendStoreAction,
   reactivateStoreAction,
   changeStorePlanAction,
   adminForceLowStockAction,
   emailApplicantAction,
+  deleteStoreAction,
 } from "@/app/admin/actions";
 
 type Plan = "weekly" | "monthly" | "none";
@@ -58,6 +61,10 @@ export function StoreControls({
   const [emailBody, setEmailBody] = useState("");
   const [emailErrors, setEmailErrors] = useState<Record<string, string>>({});
   const [emailSent, setEmailSent] = useState(false);
+
+  // Delete state
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
 
   function flashError(msg: string) {
     setError(msg);
@@ -151,6 +158,19 @@ export function StoreControls({
         setEmailBody("");
         flashSuccess(`Email queued for ${applicantEmail}.`);
         router.refresh();
+      }
+    });
+  }
+  function onDelete() {
+    setError(null);
+    setSuccess(null);
+    startTransition(async () => {
+      const res = await deleteStoreAction({ storeSlug, confirm: deleteConfirm });
+      if (!res.ok) {
+        flashError(res.error);
+      } else {
+        router.push("/admin/stores");
+        return;
       }
     });
   }
@@ -390,6 +410,74 @@ export function StoreControls({
                 </span>
               )}
             </div>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-vermillion/20 bg-vermillion/[0.03] p-5">
+        <p className="eyebrow-ink mb-3">Danger zone</p>
+        {showDelete ? (
+          <div className="space-y-3">
+            <p className="text-[13px] text-ink/70">
+              This will permanently delete the store, all products, orders,
+              promos, and billing records. This cannot be undone.
+            </p>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/60">
+                Type <span className="font-mono text-vermillion">DELETE</span> to confirm
+              </label>
+              <Input
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                placeholder="DELETE"
+                className="mt-1 font-mono"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowDelete(false);
+                  setDeleteConfirm("");
+                }}
+                disabled={pending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="vermillion"
+                size="sm"
+                onClick={onDelete}
+                disabled={pending || deleteConfirm !== "DELETE"}
+              >
+                {pending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" strokeWidth={2.25} />
+                )}
+                Permanently delete
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <p className="text-[13px] text-ink/55">
+              Permanently remove this store and all its data.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDelete(true)}
+              disabled={pending}
+              className="flex-shrink-0 border-vermillion/30 text-vermillion hover:bg-vermillion/5"
+            >
+              <Trash2 className="h-4 w-4" strokeWidth={2.25} />
+              Delete store
+            </Button>
           </div>
         )}
       </section>

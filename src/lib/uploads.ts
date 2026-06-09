@@ -51,6 +51,10 @@ export async function uploadProductImage(file: File): Promise<UploadResult> {
   return { ok: true, url: urlData.publicUrl, filename };
 }
 
+export async function uploadHeroImage(file: File): Promise<UploadResult> {
+  return uploadProductImage(file);
+}
+
 function isSupabaseUpload(url: string): boolean {
   return url.includes(".supabase.co/storage/v1/object/public/");
 }

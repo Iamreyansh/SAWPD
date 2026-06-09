@@ -67,21 +67,7 @@ export function Hero() {
               </Link>
             </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, delay: 1.1 }}
-              className="mt-12 flex flex-wrap items-center gap-x-6 gap-y-2 text-[12.5px] text-ink/50"
-            >
-              <span className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-vermillion" />
-                14 days free · no card
-              </span>
-              <span className="hidden sm:inline">·</span>
-              <span>From ₹499/wk after trial</span>
-              <span className="hidden sm:inline">·</span>
-              <span>Cancel anytime</span>
-            </motion.div>
+
           </div>
 
           <div className="md:col-span-5">
@@ -89,7 +75,6 @@ export function Hero() {
           </div>
         </div>
       </div>
-      <StatsStrip />
     </section>
   );
 }
@@ -155,40 +140,4 @@ function PhoneMockup() {
   );
 }
 
-function StatsStrip() {
-  const stats = [
-    { value: "200+", label: "active shops" },
-    { value: "10K+", label: "orders processed" },
-    { value: "₹40L+", label: "paid to creators" },
-    { value: "100%", label: "yours, every sale" },
-  ];
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.7, delay: 1.0, ease }}
-      className="container-editorial mt-16 md:mt-24"
-    >
-      <div className="rounded-2xl border border-ink/10 bg-bone/60 p-6 backdrop-blur-sm md:p-8">
-        <div className="grid grid-cols-2 gap-y-6 md:grid-cols-4 md:gap-y-0">
-          {stats.map((s, i) => (
-            <div
-              key={s.label}
-              className={
-                "flex flex-col items-center text-center " +
-                (i > 0 ? "md:border-l md:border-ink/10" : "")
-              }
-            >
-              <p className="text-3xl font-extrabold tracking-[-0.04em] text-ink md:text-4xl">
-                {s.value}
-              </p>
-              <p className="mt-1 text-[12px] font-medium uppercase tracking-[0.12em] text-ink/55">
-                {s.label}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
+

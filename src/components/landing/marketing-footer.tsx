@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { NewsletterForm } from "./newsletter-form";
+import { Logo } from "@/components/ui/logo";
 
 export function MarketingFooter() {
   return (
@@ -7,25 +7,11 @@ export function MarketingFooter() {
       <div className="container-editorial py-14 md:py-20">
         <div className="grid grid-cols-1 gap-10 md:grid-cols-12 md:gap-12">
           <div className="md:col-span-5">
-            <Link href="/" className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-bone font-bold text-sm">
-                S
-              </span>
-              <span className="text-[15px] font-semibold tracking-[-0.02em] text-ink">
-                SAWPD
-              </span>
-            </Link>
+            <Logo invert />
             <p className="mt-4 max-w-xs text-[13.5px] text-ink/55">
               The shop in your bio. For Instagram creators who&apos;d rather
               ship than DM.
             </p>
-            <div className="mt-8">
-              <p className="eyebrow-ink mb-3">Get updates</p>
-              <p className="mb-3 max-w-sm text-[12.5px] text-ink/55">
-                New features, creator stories, no spam. Unsubscribe in one click.
-              </p>
-              <NewsletterForm />
-            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-8 md:col-span-7 md:grid-cols-3">
@@ -42,9 +28,10 @@ export function MarketingFooter() {
             <div>
               <p className="eyebrow-ink mb-3">Company</p>
               <ul className="space-y-2 text-[13.5px] text-ink/65">
-                <li><Link href="/apply" className="transition-colors hover:text-ink">Apply</Link></li>
                 <li><Link href="/about" className="transition-colors hover:text-ink">About</Link></li>
                 <li><Link href="/contact" className="transition-colors hover:text-ink">Contact</Link></li>
+                <li><Link href="/apply" className="transition-colors hover:text-ink">Apply</Link></li>
+                <li><Link href="/seller/login" className="transition-colors hover:text-ink">Log in</Link></li>
               </ul>
             </div>
             <div>

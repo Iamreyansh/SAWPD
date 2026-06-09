@@ -41,7 +41,7 @@ export function FAQ() {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.6 }}
-        className="mb-12 max-w-2xl"
+        className="mb-12 text-center"
       >
         <p className="eyebrow mb-3">FAQ</p>
         <h2 className="display-l text-ink text-balance">
@@ -49,7 +49,7 @@ export function FAQ() {
         </h2>
       </motion.div>
 
-      <div className="max-w-3xl">
+      <div className="mx-auto max-w-3xl">
         {faqs.map((f, i) => {
           const isOpen = open === i;
           return (

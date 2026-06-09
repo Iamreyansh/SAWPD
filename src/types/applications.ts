@@ -8,6 +8,25 @@ export type ApplicationInput = {
   instagramHandle: string;
   email: string;
   phone: string;
+  storeName?: string;
+  niche?: Niche;
+  followerCount?: number;
+  salesCadence?: SalesCadence;
+  salesCount?: number;
+  averageOrderValue?: number;
+  currentSetup?: string;
+  websiteUrl?: string;
+  topProducts?: string;
+  referralSource?: string;
+  motivation?: string;
+};
+
+export type Application = {
+  id: string;
+  fullName: string;
+  instagramHandle: string;
+  email: string;
+  phone: string;
   storeName: string;
   niche: Niche;
   followerCount: number;
@@ -19,21 +38,12 @@ export type ApplicationInput = {
   topProducts: string;
   referralSource: string;
   motivation: string;
-};
-
-export type Application = ApplicationInput & {
-  id: string;
   createdAt: string;
   status: ApplicationStatus;
   reviewedAt?: string;
   reviewerNote?: string;
   trialEndsAt?: string;
   plan?: Plan;
-  /**
-   * Foreign key into data/sellers.json. Set when the applicant is
-   * signed in at submit time, so the application can be linked back
-   * to the seller's account for onboarding.
-   */
   sellerId?: string;
 };
 

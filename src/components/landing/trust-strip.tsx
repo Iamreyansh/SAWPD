@@ -26,26 +26,26 @@ const items = [
 export function TrustStrip() {
   return (
     <section className="border-y border-ink/[0.06] bg-ink text-bone">
-      <div className="container-editorial py-14 md:py-16">
-        <div className="grid grid-cols-2 gap-y-10 md:grid-cols-4 md:gap-y-0">
+      <div className="container-editorial py-16 md:py-20">
+        <div className="grid grid-cols-2 gap-y-12 md:grid-cols-4 md:gap-y-0">
           {items.map((it, i) => {
             const Icon = it.icon;
             return (
               <div
                 key={it.title}
                 className={
-                  "flex items-start gap-3 " +
-                  (i > 0 ? "md:border-l md:border-bone/15 md:pl-6" : "")
+                  "flex items-start gap-4 " +
+                  (i > 0 ? "md:border-l md:border-bone/15 md:pl-8" : "")
                 }
               >
-                <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-bone/10">
-                  <Icon className="h-4 w-4 text-vermillion" strokeWidth={2} />
+                <span className="mt-1 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-bone/10">
+                  <Icon className="h-5 w-5 text-vermillion" strokeWidth={2} />
                 </span>
                 <div>
-                  <p className="text-[14px] font-semibold tracking-[-0.01em] text-bone">
+                  <p className="text-[15px] font-semibold tracking-[-0.01em] text-bone">
                     {it.title}
                   </p>
-                  <p className="mt-2 text-[13px] leading-relaxed text-bone/60">
+                  <p className="mt-2 text-[14px] leading-relaxed text-bone/60">
                     {it.body}
                   </p>
                 </div>

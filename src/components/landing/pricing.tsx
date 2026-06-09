@@ -161,7 +161,7 @@ export function Pricing() {
             <Link
               href={p.ctaHref}
               className={cn(
-                "mt-8 inline-flex h-12 items-center justify-center rounded-full text-[14px] font-semibold transition-all active:scale-[0.98]",
+                "mt-auto inline-flex h-12 items-center justify-center rounded-full text-[14px] font-semibold transition-all active:scale-[0.98]",
                 p.highlight
                   ? "bg-vermillion text-bone hover:bg-vermillion-deep shadow-glow"
                   : "border border-ink/15 bg-bone text-ink hover:bg-ink/[0.04]"

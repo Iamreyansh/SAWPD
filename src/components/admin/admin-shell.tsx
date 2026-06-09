@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { LayoutDashboard, Inbox, Store, LogOut, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/app/admin/actions";
+import { Logo } from "@/components/ui/logo";
 
 const navItems = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
@@ -18,13 +19,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-bone">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-ink/10 bg-bone md:flex md:flex-col">
         <div className="flex h-16 items-center gap-2 border-b border-ink/10 px-5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-bone font-bold text-sm">
-            S
-          </span>
+          <Logo href={undefined} />
           <div className="leading-tight">
-            <p className="text-[14px] font-semibold tracking-[-0.01em] text-ink">
-              SAWPD
-            </p>
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-ink/40">
               Admin
             </p>
@@ -76,9 +72,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <div className="md:pl-60">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-ink/10 bg-bone/85 px-6 backdrop-blur-md md:hidden">
           <Link href="/admin" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-bone font-bold text-sm">
-              S
-            </span>
+            <Logo invert />
             <span className="text-[15px] font-semibold tracking-[-0.02em] text-ink">
               Admin
             </span>

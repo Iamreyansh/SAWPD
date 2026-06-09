@@ -14,49 +14,12 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { submitApplication, type ApplyResult } from "./actions";
 import {
   sellerSignupAction,
   type SellerAuthResult,
 } from "@/app/seller/actions";
-import type { Niche, SalesCadence } from "@/types/applications";
 import { cn } from "@/lib/utils";
-
-const niches: { id: Niche; label: string }[] = [
-  { id: "fashion", label: "Fashion & apparel" },
-  { id: "beauty", label: "Beauty & skincare" },
-  { id: "jewelry", label: "Jewelry & accessories" },
-  { id: "home", label: "Home & decor" },
-  { id: "art", label: "Art & prints" },
-  { id: "other", label: "Other" },
-];
-
-const cadences: { id: SalesCadence; label: string }[] = [
-  { id: "daily", label: "Per day" },
-  { id: "weekly", label: "Per week" },
-  { id: "monthly", label: "Per month" },
-];
-
-const referralSources = [
-  "Instagram",
-  "A friend",
-  "Google",
-  "Twitter / X",
-  "Reddit",
-  "Other",
-];
-
-const STEPS = [
-  { id: 0, title: "You", description: "Just so we know who we're talking to." },
-  { id: 1, title: "Shop", description: "What you sell and who you sell to." },
-  {
-    id: 2,
-    title: "Sales",
-    description: "Your sales velocity and your current setup.",
-  },
-  { id: 3, title: "Why", description: "What problem are we solving for you?" },
-] as const;
 
 type FormState = {
   accountEmail: string;
@@ -66,19 +29,10 @@ type FormState = {
   email: string;
   phone: string;
   storeName: string;
-  niche: Niche | "";
-  followerCount: string;
-  salesCadence: SalesCadence;
-  salesCount: string;
-  averageOrderValue: string;
-  currentSetup: string;
-  websiteUrl: string;
-  topProducts: string;
-  motivation: string;
-  referralSource: string;
+  niche: string;
 };
 
-const DRAFT_KEY = "sawpd.applyDraft.v1";
+const DRAFT_KEY = "sawpd.applyDraft.v3";
 
 const initialState: FormState = {
   accountEmail: "",
@@ -89,15 +43,6 @@ const initialState: FormState = {
   phone: "",
   storeName: "",
   niche: "",
-  followerCount: "",
-  salesCadence: "weekly",
-  salesCount: "",
-  averageOrderValue: "",
-  currentSetup: "",
-  websiteUrl: "",
-  topProducts: "",
-  motivation: "",
-  referralSource: "",
 };
 
 function loadDraft(): FormState {
@@ -123,8 +68,15 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
   const [hydrated, setHydrated] = useState(false);
 
   const steps = signedIn
-    ? [...STEPS]
-    : [{ id: -1, title: "Account", description: "Create a free seller account — it takes 10 seconds." }, ...STEPS];
+    ? [
+        { id: 0, title: "You", description: "Your name, handle, and contact." },
+        { id: 1, title: "Shop", description: "Your shop name and category." },
+      ]
+    : [
+        { id: -1, title: "Account", description: "Create a free seller account — it takes 10 seconds." },
+        { id: 0, title: "You", description: "Your name, handle, and contact." },
+        { id: 1, title: "Shop", description: "Your shop name and category." },
+      ];
 
   useEffect(() => {
     setForm(loadDraft());
@@ -136,7 +88,7 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
     try {
       window.localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
     } catch {
-      // ignore quota / disabled storage
+      // ignore
     }
   }, [form, hydrated]);
 
@@ -150,29 +102,17 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
       if (!/^\S+@\S+\.\S+$/.test(form.accountEmail)) e.accountEmail = "Enter a valid email";
       if (form.accountPassword.length < 8) e.accountPassword = "At least 8 characters";
     } else {
-      const formIdx = signedIn ? idx : idx - 1;
-      if (formIdx === 0) {
+      const realIdx = signedIn ? idx : idx - 1;
+      if (realIdx === 0) {
+        // "You" step
         if (form.fullName.trim().length < 2) e.fullName = "Required";
         if (!form.instagramHandle.trim()) e.instagramHandle = "Required";
         if (!/^\S+@\S+\.\S+$/.test(form.email)) e.email = "Enter a valid email";
         if (form.phone.replace(/\D/g, "").length < 10) e.phone = "Min 10 digits";
-      } else if (formIdx === 1) {
-        if (form.storeName.trim().length < 2) e.storeName = "Required";
-        if (!form.niche) e.niche = "Pick one";
-        if (form.followerCount && Number(form.followerCount) < 0)
-          e.followerCount = "Cannot be negative";
-        if (form.averageOrderValue && Number(form.averageOrderValue) < 0)
-          e.averageOrderValue = "Cannot be negative";
-      } else if (formIdx === 2) {
-        if (form.salesCount && Number(form.salesCount) < 0)
-          e.salesCount = "Cannot be negative";
-        if (form.currentSetup.trim().length < 2) e.currentSetup = "Tell us briefly";
-        if (form.websiteUrl && !/^https?:\/\//.test(form.websiteUrl))
-          e.websiteUrl = "Use a full URL (https://...)";
-      } else if (formIdx === 3) {
-        if (form.topProducts.trim().length < 8) e.topProducts = "List your top pieces";
-        if (form.motivation.trim().length < 12) e.motivation = "Tell us a bit more";
-        if (!form.referralSource) e.referralSource = "Pick one";
+      } else if (realIdx === 1) {
+        // "Shop" step
+        if (form.storeName.trim().length < 2) e.storeName = "Shop name is required";
+        if (!form.niche) e.niche = "Pick a niche";
       }
     }
     setFieldErrors(e);
@@ -229,16 +169,7 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
       email: form.email.trim(),
       phone: form.phone.trim(),
       storeName: form.storeName.trim(),
-      niche: form.niche || "other",
-      followerCount: form.followerCount || "0",
-      salesCadence: form.salesCadence,
-      salesCount: form.salesCount || "0",
-      averageOrderValue: form.averageOrderValue || "0",
-      currentSetup: form.currentSetup.trim(),
-      websiteUrl: form.websiteUrl.trim(),
-      topProducts: form.topProducts.trim(),
-      referralSource: form.referralSource,
-      motivation: form.motivation.trim(),
+      niche: form.niche || undefined,
     };
     startTransition(async () => {
       const result: ApplyResult = await submitApplication(payload);
@@ -281,11 +212,11 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
       <div className="mx-auto max-w-2xl">
         <p className="eyebrow mb-3">Apply for access</p>
         <h1 className="display-l text-ink text-balance">
-          Tell us about your shop.
+          Tell us about yourself.
         </h1>
         <p className="mt-4 max-w-xl text-[15px] text-ink/60">
-          We approve by hand. The more specific you are, the faster we say yes.
-          Most decisions land within 24 hours.
+          We approve by hand. Most decisions land within 24 hours.
+          You can add shop details later from your dashboard.
         </p>
 
         <div className="mt-10">
@@ -305,7 +236,7 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             />
           </div>
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[11.5px] text-ink/55">
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[11.5px] text-ink/55">
             {steps.map((s, i) => {
               const isDone = step > i;
               const isCurrent = step === i;
@@ -387,201 +318,74 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
                 </>
               )}
 
-              {(() => {
-                const formStep = signedIn ? step : step - 1;
-                if (formStep === 0) return (
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <Field label="Full name" error={fieldErrors.fullName}>
-                      <Input
-                        value={form.fullName}
-                        onChange={(e) => patch("fullName", e.target.value)}
-                        placeholder="Riya Sharma"
-                        autoComplete="name"
-                      />
-                    </Field>
-                    <Field
-                      label="Instagram handle"
-                      error={fieldErrors.instagramHandle}
-                    >
-                      <Input
-                        value={form.instagramHandle}
-                        onChange={(e) => patch("instagramHandle", e.target.value)}
-                        placeholder="@yourbrand"
-                      />
-                    </Field>
-                    <Field label="Email" error={fieldErrors.email}>
-                      <Input
-                        type="email"
-                        value={form.email}
-                        onChange={(e) => patch("email", e.target.value)}
-                        placeholder="you@example.com"
-                        autoComplete="email"
-                      />
-                    </Field>
-                    <Field label="Phone" error={fieldErrors.phone}>
-                      <Input
-                        type="tel"
-                        value={form.phone}
-                        onChange={(e) => patch("phone", e.target.value)}
-                        placeholder="+91 98765 43210"
-                        autoComplete="tel"
-                      />
-                    </Field>
-                  </div>
-                );
-                if (formStep === 1) return (
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <Field label="Shop name" error={fieldErrors.storeName}>
-                      <Input
-                        value={form.storeName}
-                        onChange={(e) => patch("storeName", e.target.value)}
-                        placeholder="e.g. Riya Studio"
-                      />
-                    </Field>
-                    <Field label="Niche" error={fieldErrors.niche}>
-                      <Select
-                        value={form.niche}
-                        onChange={(v) => patch("niche", v as Niche | "")}
-                        options={niches}
-                        placeholder="Choose a niche"
-                      />
-                    </Field>
-                    <Field
-                      label="Instagram followers"
-                      error={fieldErrors.followerCount}
-                      hint="Approximate is fine."
-                    >
-                      <Input
-                        type="number"
-                        inputMode="numeric"
-                        value={form.followerCount}
-                        onChange={(e) => patch("followerCount", e.target.value)}
-                        placeholder="e.g. 4200"
-                        min={0}
-                      />
-                    </Field>
-                    <Field
-                      label="Average order value (₹)"
-                      error={fieldErrors.averageOrderValue}
-                    >
-                      <Input
-                        type="number"
-                        inputMode="numeric"
-                        value={form.averageOrderValue}
-                        onChange={(e) =>
-                          patch("averageOrderValue", e.target.value)
-                        }
-                        placeholder="e.g. 1500"
-                        min={0}
-                      />
-                    </Field>
-                  </div>
-                );
-                if (formStep === 2) return (
-                  <>
-                    <div>
-                      <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/60">
-                        How many orders do you currently do?
-                      </span>
-                      <div className="grid grid-cols-3 gap-2 rounded-xl border border-ink/10 bg-bone p-1">
-                        {cadences.map((c) => (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => patch("salesCadence", c.id)}
-                            className={
-                              "h-10 rounded-lg text-[13px] font-semibold transition-colors " +
-                              (form.salesCadence === c.id
-                                ? "bg-ink text-bone"
-                                : "text-ink/60 hover:text-ink")
-                            }
-                          >
-                            {c.label}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="mt-4">
-                        <Field
-                          label="Number"
-                          error={fieldErrors.salesCount}
-                          hint="Approximate is fine."
-                        >
-                          <Input
-                            type="number"
-                            inputMode="numeric"
-                            value={form.salesCount}
-                            onChange={(e) => patch("salesCount", e.target.value)}
-                            placeholder="e.g. 12"
-                            min={0}
-                          />
-                        </Field>
-                      </div>
-                    </div>
-                    <Field
-                      label="How do you sell today?"
-                      error={fieldErrors.currentSetup}
-                      hint="e.g. DMs only, WhatsApp catalog, Shopify, etc."
-                    >
-                      <Textarea
-                        value={form.currentSetup}
-                        onChange={(e) => patch("currentSetup", e.target.value)}
-                        placeholder="Today I sell via DMs and WhatsApp. I ship from Bangalore."
-                      />
-                    </Field>
-                    <Field
-                      label="Website (optional)"
-                      error={fieldErrors.websiteUrl}
-                      hint="If you have one — Instagram-only is totally fine."
-                    >
-                      <Input
-                        value={form.websiteUrl}
-                        onChange={(e) => patch("websiteUrl", e.target.value)}
-                        type="url"
-                        placeholder="https://"
-                      />
-                    </Field>
-                  </>
-                );
-                if (formStep === 3) return (
-                  <>
-                    <Field
-                      label="Your top 3 best-sellers"
-                      error={fieldErrors.topProducts}
-                      hint="The single most important field. List 3 products and roughly what they sell for."
-                    >
-                      <Textarea
-                        value={form.topProducts}
-                        onChange={(e) => patch("topProducts", e.target.value)}
-                        placeholder="1. Linen camp shirt — ₹1,899 · 2. Pleated trouser — ₹2,299 · 3. Canvas tote — ₹899"
-                      />
-                    </Field>
-                    <Field
-                      label="Why do you want to join SAWPD?"
-                      error={fieldErrors.motivation}
-                      hint="One short paragraph. What problem are we solving for you?"
-                    >
-                      <Textarea
-                        value={form.motivation}
-                        onChange={(e) => patch("motivation", e.target.value)}
-                        placeholder="I lose sales in DMs because people ghost. A real checkout link would help me convert."
-                      />
-                    </Field>
-                    <Field
-                      label="How did you hear about us?"
-                      error={fieldErrors.referralSource}
-                    >
-                      <Select
-                        value={form.referralSource}
-                        onChange={(v) => patch("referralSource", v)}
-                        options={referralSources.map((s) => ({ id: s, label: s }))}
-                        placeholder="Choose one"
-                      />
-                    </Field>
-                  </>
-                );
-                return null;
-              })()}
+              {(signedIn || step > 0) && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Full name" error={fieldErrors.fullName}>
+                    <Input
+                      value={form.fullName}
+                      onChange={(e) => patch("fullName", e.target.value)}
+                      placeholder="Riya Sharma"
+                      autoComplete="name"
+                    />
+                  </Field>
+                  <Field label="Instagram handle" error={fieldErrors.instagramHandle}>
+                    <Input
+                      value={form.instagramHandle}
+                      onChange={(e) => patch("instagramHandle", e.target.value)}
+                      placeholder="@yourbrand"
+                    />
+                  </Field>
+                  <Field label="Email" error={fieldErrors.email}>
+                    <Input
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => patch("email", e.target.value)}
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                    />
+                  </Field>
+                  <Field label="Phone" error={fieldErrors.phone}>
+                    <Input
+                      type="tel"
+                      value={form.phone}
+                      onChange={(e) => patch("phone", e.target.value)}
+                      placeholder="+91 98765 43210"
+                      autoComplete="tel"
+                    />
+                  </Field>
+                </div>
+              )}
             </div>
+
+            {/* Shop step */}
+            {(signedIn || step > 0) && (signedIn ? step === 1 : step === 2) && (
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Shop name" error={fieldErrors.storeName}>
+                    <Input
+                      value={form.storeName}
+                      onChange={(e) => patch("storeName", e.target.value)}
+                      placeholder="Riya's Closet"
+                    />
+                  </Field>
+                  <Field label="Niche" error={fieldErrors.niche}>
+                    <select
+                      value={form.niche}
+                      onChange={(e) => patch("niche", e.target.value)}
+                      className="flex h-10 w-full rounded-xl border border-ink/15 bg-bone px-3 py-2 text-[14px] text-ink outline-none transition-colors focus:border-ink/40"
+                    >
+                      <option value="">Select a niche</option>
+                      <option value="fashion">Fashion</option>
+                      <option value="beauty">Beauty</option>
+                      <option value="home">Home decor</option>
+                      <option value="art">Art & craft</option>
+                      <option value="jewelry">Jewelry</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </Field>
+                </div>
+              </div>
+            )}
           </motion.div>
         </AnimatePresence>
 
@@ -619,7 +423,7 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
                 <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
                 Submitting…
               </>
-            ) : step === STEPS.length - 1 ? (
+            ) : step === steps.length - 1 ? (
               <>
                 Submit application
                 <ArrowRight className="h-4 w-4" strokeWidth={2.25} />
@@ -728,36 +532,5 @@ function Field({
         <span className="mt-1.5 block text-[12px] text-vermillion">{error}</span>
       )}
     </label>
-  );
-}
-
-function Select({
-  value,
-  onChange,
-  options,
-  placeholder,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-  options: { id: string; label: string }[];
-  placeholder?: string;
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="flex h-12 w-full rounded-xl border border-ink/10 bg-bone px-4 text-base text-ink transition-all duration-200 focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/5"
-    >
-      {placeholder && (
-        <option value="" disabled>
-          {placeholder}
-        </option>
-      )}
-      {options.map((o) => (
-        <option key={o.id} value={o.id}>
-          {o.label}
-        </option>
-      ))}
-    </select>
   );
 }

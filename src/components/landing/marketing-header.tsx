@@ -6,6 +6,7 @@ import { useEffect, useState, useTransition } from "react";
 import { LogOut, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sellerLogoutAction } from "@/app/seller/actions";
+import { Logo } from "@/components/ui/logo";
 
 export type HeaderSeller = {
   email: string;
@@ -38,14 +39,7 @@ export function MarketingHeader({ seller }: { seller?: HeaderSeller | null }) {
       )}
     >
       <div className="container-editorial flex h-16 items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-bone font-bold tracking-tight text-sm">
-            S
-          </span>
-          <span className="text-[15px] font-semibold tracking-[-0.02em] text-ink">
-            SAWPD
-          </span>
-        </Link>
+        <Logo invert />
         <nav className="hidden items-center gap-7 text-[13.5px] font-medium text-ink/70 md:flex">
           <a href="#how" className="transition-colors hover:text-ink">How it works</a>
           <a href="#pricing" className="transition-colors hover:text-ink">Pricing</a>
