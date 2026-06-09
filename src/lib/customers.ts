@@ -119,7 +119,11 @@ function toCsv(rows: string[][]): string {
     .map((r) =>
       r
         .map((cell) => {
-          const s = String(cell ?? "");
+          let s = String(cell ?? "");
+          // Prevent CSV injection: prefix formula-triggering characters
+          if (/^[=+\-@\t\r]/.test(s)) {
+            s = "'" + s;
+          }
           if (/[",\n\r]/.test(s)) {
             return `"${s.replace(/"/g, '""')}"`;
           }

@@ -160,6 +160,9 @@ export function CheckoutClient({ store, products }: Props) {
           email: data.email?.trim() || undefined,
           address: data.address.trim(),
         });
+        // Replace checkout in history so browser-back goes to the shop
+        // instead of an empty checkout page.
+        window.history.replaceState(null, "", `/s/${store.slug}`);
         setSubmitted({ orderId: result.orderId });
         clear();
       } else {

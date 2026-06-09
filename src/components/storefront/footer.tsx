@@ -3,16 +3,20 @@
 import { motion } from "framer-motion";
 import { TrendingUp } from "lucide-react";
 import type { Store } from "@/types/storefront";
-import type { Order } from "@/types/seller";
+
+export type StoreStats = {
+  weekCount: number;
+  totalCount: number;
+  customerCount: number;
+} | null;
 
 export function StorefrontFooter({
   store,
-  orders,
+  stats,
 }: {
   store: Store;
-  orders?: Order[];
+  stats?: StoreStats;
 }) {
-  const stats = computeStats(orders);
   return (
     <footer className="border-t border-ink/[0.06] bg-bone">
       {stats && (
@@ -62,31 +66,4 @@ export function StorefrontFooter({
       </div>
     </footer>
   );
-}
-
-function computeStats(orders: Order[] | undefined) {
-  if (!orders || orders.length === 0) return null;
-  const soldStatuses: Order["status"][] = [
-    "verified",
-    "shipped",
-    "completed",
-  ];
-  const sold = orders.filter((o) => soldStatuses.includes(o.status));
-  if (sold.length === 0) return null;
-  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const weekQty = sold
-    .filter((o) => new Date(o.createdAt).getTime() >= weekAgo)
-    .reduce((acc, o) => acc + o.lines.reduce((a, l) => a + l.qty, 0), 0);
-  const totalQty = sold.reduce(
-    (acc, o) => acc + o.lines.reduce((a, l) => a + l.qty, 0),
-    0
-  );
-  const customerCount = new Set(
-    sold.map((o) => o.customer?.phone ?? o.customer?.name ?? o.id)
-  ).size;
-  return {
-    weekCount: weekQty,
-    totalCount: totalQty,
-    customerCount,
-  };
 }

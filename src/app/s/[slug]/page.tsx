@@ -10,13 +10,32 @@ import { Hero } from "@/components/storefront/hero";
 import { StorefrontHeader } from "@/components/storefront/header";
 import { ProductGrid } from "@/components/storefront/product-grid";
 import { EmptyStorefront } from "@/components/storefront/empty-state";
-import { StorefrontFooter } from "@/components/storefront/footer";
+import { StorefrontFooter, type StoreStats } from "@/components/storefront/footer";
 import { CartSheet } from "@/components/storefront/cart-sheet";
 import { ProductDetailSheet } from "@/components/storefront/product-detail-sheet";
 import type { Product } from "@/types/storefront";
 import type { SellerStore } from "@/types/seller";
+import type { Order } from "@/types/seller";
 
 type Params = { slug: string };
+
+function computeStoreStats(orders: Order[]): StoreStats {
+  const soldStatuses: Order["status"][] = ["verified", "shipped", "completed"];
+  const sold = orders.filter((o) => soldStatuses.includes(o.status));
+  if (sold.length === 0) return null;
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const weekQty = sold
+    .filter((o) => new Date(o.createdAt).getTime() >= weekAgo)
+    .reduce((acc, o) => acc + o.lines.reduce((a, l) => a + l.qty, 0), 0);
+  const totalQty = sold.reduce(
+    (acc, o) => acc + o.lines.reduce((a, l) => a + l.qty, 0),
+    0
+  );
+  const customerCount = new Set(
+    sold.map((o) => o.customer?.phone ?? o.customer?.name ?? o.id)
+  ).size;
+  return { weekCount: weekQty, totalCount: totalQty, customerCount };
+}
 
 export async function generateStaticParams(): Promise<Params[]> {
   const slugs = await listStoreSlugs();
@@ -49,6 +68,7 @@ export default async function StorefrontPage({
   const products = (await listLiveProductsForStore(slug)) as Product[];
   const orders = await listOrders(slug);
   const isOpen = isStoreOpen(store);
+  const stats = computeStoreStats(orders);
 
   if (!isOpen) {
     return (
@@ -77,7 +97,7 @@ export default async function StorefrontPage({
             </Link>
           </div>
         </main>
-        <StorefrontFooter store={store} orders={orders} />
+        <StorefrontFooter store={store} stats={stats} />
       </div>
     );
   }
@@ -100,7 +120,7 @@ export default async function StorefrontPage({
           </Suspense>
         )}
       </main>
-      <StorefrontFooter store={store} orders={orders} />
+      <StorefrontFooter store={store} stats={stats} />
       <CartSheet products={products} storeSlug={store.slug} />
       <ProductDetailSheet products={products} />
     </div>

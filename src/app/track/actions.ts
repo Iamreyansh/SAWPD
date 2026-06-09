@@ -81,10 +81,8 @@ export async function trackOrderAction(input: unknown): Promise<TrackResult> {
     return { ok: false, error: "No matching order found. Please check your order ID and phone number." };
   }
   const orderPhoneDigits = normalizePhone(order.customer.phone);
-  if (
-    !orderPhoneDigits.endsWith(phoneDigits) &&
-    !phoneDigits.endsWith(orderPhoneDigits)
-  ) {
+  // Require exact match after normalization to prevent partial phone enumeration
+  if (orderPhoneDigits !== phoneDigits) {
     return { ok: false, error: "No matching order found. Please check your order ID and phone number." };
   }
 

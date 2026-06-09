@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useParams } from "next/navigation";
 import { Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -53,12 +53,29 @@ export function ProductDetailSheet({ products }: Props) {
     }
   };
 
-  const nextImage = () => {
+  const nextImage = useCallback(() => {
     if (images.length > 1) setActiveIdx((i) => (i + 1) % images.length);
-  };
-  const prevImage = () => {
+  }, [images.length]);
+  const prevImage = useCallback(() => {
     if (images.length > 1) setActiveIdx((i) => (i - 1 + images.length) % images.length);
-  };
+  }, [images.length]);
+
+  // Touch swipe support for mobile
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
+  const onTouchEnd = useCallback((e: React.TouchEvent) => {
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    // Only swipe if horizontal movement dominates vertical (>2:1) and is > 40px
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 2) {
+      if (dx < 0) nextImage();
+      else prevImage();
+    }
+  }, [nextImage, prevImage]);
 
   return (
     <Sheet open={!!product} onOpenChange={handleOpenChange}>
@@ -87,6 +104,8 @@ export function ProductDetailSheet({ products }: Props) {
                   if (e.key === "ArrowLeft") prevImage();
                   if (e.key === "ArrowRight") nextImage();
                 }}
+                onTouchStart={onTouchStart}
+                onTouchEnd={onTouchEnd}
                 tabIndex={-1}
               >
                 <div className="relative aspect-square w-full">
@@ -110,7 +129,7 @@ export function ProductDetailSheet({ products }: Props) {
                     <button
                       type="button"
                       onClick={prevImage}
-                      className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-bone/90 text-ink opacity-0 shadow-soft transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 md:opacity-100"
+                      className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-bone/90 text-ink shadow-soft transition-opacity md:opacity-100 md:group-hover:opacity-100"
                       aria-label="Previous image"
                     >
                       <ChevronLeft className="h-5 w-5" strokeWidth={1.75} />
@@ -118,7 +137,7 @@ export function ProductDetailSheet({ products }: Props) {
                     <button
                       type="button"
                       onClick={nextImage}
-                      className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-bone/90 text-ink opacity-0 shadow-soft transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 md:opacity-100"
+                      className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-bone/90 text-ink shadow-soft transition-opacity md:opacity-100 md:group-hover:opacity-100"
                       aria-label="Next image"
                     >
                       <ChevronRight className="h-5 w-5" strokeWidth={1.75} />

@@ -218,7 +218,9 @@ export async function notifyOrderStatusChanged(params: {
         ? "order_verified"
         : params.status === "shipped"
           ? "order_shipped"
-          : "order_placed",
+          : params.status === "completed"
+            ? "order_shipped"
+            : "order_placed",
     to,
     subject: `Order ${params.orderId} → ${params.status}`,
     body: `${params.storeName}: order from ${params.customerName} is now ${params.status}${

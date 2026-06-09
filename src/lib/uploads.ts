@@ -19,6 +19,22 @@ const EXT_BY_MIME: Record<string, string> = {
   "image/gif": "gif",
 };
 
+// Magic byte signatures for image format verification
+const MAGIC_BYTES: Record<string, number[][]> = {
+  "image/jpeg": [[0xff, 0xd8, 0xff]],
+  "image/png": [[0x89, 0x50, 0x4e, 0x47]],
+  "image/gif": [[0x47, 0x49, 0x46, 0x38]],
+  "image/webp": [[0x52, 0x49, 0x46, 0x46]], // RIFF header (first 4 bytes)
+};
+
+function matchesMagicBytes(buffer: Uint8Array, mimeType: string): boolean {
+  const signatures = MAGIC_BYTES[mimeType];
+  if (!signatures) return true; // No signature to check
+  return signatures.some((sig) =>
+    sig.every((byte, i) => buffer[i] === byte)
+  );
+}
+
 export type UploadResult =
   | { ok: true; url: string; filename: string }
   | { ok: false; error: string };
@@ -37,9 +53,15 @@ export async function uploadProductImage(file: File): Promise<UploadResult> {
     return { ok: false, error: "Max file size is 5MB." };
   }
 
+  const buffer = new Uint8Array(await file.arrayBuffer());
+
+  // Verify magic bytes match declared MIME type
+  if (!matchesMagicBytes(buffer, file.type)) {
+    return { ok: false, error: "File content doesn't match the declared type. Upload the actual image file." };
+  }
+
   const ext = EXT_BY_MIME[file.type] ?? "bin";
   const filename = `${crypto.randomUUID()}.${ext}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
 
   const sb = createAdminClient();
   const { error } = await sb.storage

@@ -87,7 +87,11 @@ export function ProductsClient({ storeSlug, products }: Props) {
 
   const onDelete = async (id: string, title: string) => {
     if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
-    await deleteProductAction(storeSlug, id);
+    const result = await deleteProductAction(storeSlug, id);
+    if (!result.ok) {
+      alert(result.error);
+      return;
+    }
     router.refresh();
   };
 

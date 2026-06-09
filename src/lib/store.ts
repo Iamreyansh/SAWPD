@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "crypto";
 import type { SellerStore } from "@/types/seller";
 import type { PlanId } from "@/lib/plans";
 import { nextRenewalIso, newBillingId, PLAN_PRICING, planReference } from "@/lib/plans";
@@ -183,9 +184,10 @@ export async function addStore(
   const base = (input.slug ?? slugify(input.name)).slice(0, 60);
 
   // Find unique slug
+  const MAX_SLUG_ATTEMPTS = 100;
   let candidate = base;
   let suffix = 1;
-  while (true) {
+  while (suffix <= MAX_SLUG_ATTEMPTS) {
     const { data } = await sb
       .from("stores")
       .select("slug")
@@ -194,6 +196,10 @@ export async function addStore(
     if (!data) break;
     suffix += 1;
     candidate = `${base}-${suffix}`;
+  }
+  // Fallback: use random suffix if all numbered attempts exhausted
+  if (suffix > MAX_SLUG_ATTEMPTS) {
+    candidate = `${base}-${randomUUID().slice(0, 6)}`;
   }
 
   const store: SellerStore = normalizeStore({
