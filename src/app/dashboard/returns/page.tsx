@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Inbox, Undo2 } from "lucide-react";
-import { requireSeller } from "@/lib/seller-auth";
-import { getActiveStoreForSeller } from "@/lib/store";
+import { requireActiveStore } from "@/lib/seller-auth";
 import { listReturnsForStore } from "@/lib/returns";
 import { formatINR, cn } from "@/lib/utils";
 import { DEFAULT_RETURNS_POLICY } from "@/types/storefront";
@@ -59,8 +58,7 @@ function formatDate(iso: string): string {
 }
 
 export default async function ReturnsPage() {
-  const seller = await requireSeller();
-  const store = await getActiveStoreForSeller(seller.id);
+  const store = await requireActiveStore();
   if (!store) {
     return (
       <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-ink/15 p-12 text-center">

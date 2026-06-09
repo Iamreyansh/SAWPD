@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSeller } from "@/lib/seller-auth";
+import { requireSeller, getActiveStoreSlugFromCookie } from "@/lib/seller-auth";
 import { getActiveStoreForSeller } from "@/lib/store";
 import { listOrders } from "@/lib/orders";
 import { aggregateCustomers, customersToCsv } from "@/lib/customers";
@@ -11,7 +11,10 @@ export async function GET() {
   if (!seller) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const store = await getActiveStoreForSeller(seller.id);
+  const cookieSlug = await getActiveStoreSlugFromCookie();
+  const store =
+    (cookieSlug ? await getActiveStoreForSeller(seller.id, cookieSlug) : null) ??
+    (await getActiveStoreForSeller(seller.id));
   if (!store) {
     return NextResponse.json({ error: "No shop selected" }, { status: 404 });
   }

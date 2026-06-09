@@ -9,8 +9,8 @@ import {
   updateProduct,
 } from "@/lib/products";
 import { getOrder, updateOrderStatus } from "@/lib/orders";
-import { activatePlanMock, getActiveStoreForSeller, getStoreForSeller, updateStore } from "@/lib/store";
-import { requireSeller } from "@/lib/seller-auth";
+import { activatePlanMock, getStoreForSeller, updateStore } from "@/lib/store";
+import { requireActiveStore, requireSeller } from "@/lib/seller-auth";
 import { deleteUploadIfLocal, uploadProductImage, uploadHeroImage } from "@/lib/uploads";
 import { MAX_PRODUCT_IMAGES } from "@/types/storefront";
 import type { ProductImage } from "@/types/storefront";
@@ -563,15 +563,12 @@ export async function checkInventoryAction(
 }
 
 export async function dismissOnboardingAction(): Promise<{ ok: true }> {
-  const seller = await requireSeller();
-  const store = await getActiveStoreForSeller(seller.id);
-  if (store) {
-    await updateStore(
-      store.slug,
-      { onboardingDismissed: true },
-      { asSellerId: seller.id }
-    );
-  }
+  const store = await requireActiveStore();
+  await updateStore(
+    store.slug,
+    { onboardingDismissed: true },
+    { asSellerId: store.sellerId }
+  );
   revalidatePath("/dashboard");
   return { ok: true };
 }

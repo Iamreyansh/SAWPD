@@ -1,8 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Tag, Download } from "lucide-react";
-import { requireSeller } from "@/lib/seller-auth";
-import { getActiveStoreForSeller } from "@/lib/store";
+import { requireActiveStore } from "@/lib/seller-auth";
 import { listOrders } from "@/lib/orders";
 import { OrderStatusBadge } from "@/components/dashboard/order-status-badge";
 import { Pagination } from "@/components/ui/pagination";
@@ -44,8 +43,7 @@ export default async function OrdersListPage({
 }: {
   searchParams: Promise<{ status?: string; page?: string }>;
 }) {
-  const seller = await requireSeller();
-  const store = await getActiveStoreForSeller(seller.id);
+  const store = await requireActiveStore();
   if (!store) {
     return (
       <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-ink/15 p-12 text-center">

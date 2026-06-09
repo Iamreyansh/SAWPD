@@ -1,12 +1,10 @@
 import Link from "next/link";
-import { requireSeller } from "@/lib/seller-auth";
-import { getActiveStoreForSeller } from "@/lib/store";
+import { requireActiveStore } from "@/lib/seller-auth";
 import { getTrialState } from "@/lib/trial";
 import { SettingsForm } from "@/components/dashboard/settings-form";
 import { PlanPicker } from "@/components/dashboard/plan-picker";
 import { ReturnsPolicyForm } from "@/components/dashboard/returns-policy-form";
 import { DEFAULT_RETURNS_POLICY } from "@/types/storefront";
-import type { SellerStore } from "@/types/seller";
 
 export const metadata = { title: "Dashboard · Settings" };
 export const dynamic = "force-dynamic";
@@ -21,8 +19,7 @@ function formatDate(iso: string | undefined): string {
 }
 
 export default async function SettingsPage() {
-  const seller = await requireSeller();
-  const store = (await getActiveStoreForSeller(seller.id)) as SellerStore | null;
+  const store = await requireActiveStore();
   if (!store) {
     return (
       <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-ink/15 p-12 text-center">

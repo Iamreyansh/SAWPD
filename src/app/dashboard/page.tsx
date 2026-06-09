@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { requireSeller } from "@/lib/seller-auth";
-import { getActiveStoreForSeller } from "@/lib/store";
+import { requireActiveStore } from "@/lib/seller-auth";
 import { listProductsForStore } from "@/lib/products";
 import { listOrders } from "@/lib/orders";
 import { listPromosForStore } from "@/lib/promos";
@@ -11,7 +10,7 @@ import { Sparkline, buildDailyRevenue } from "@/components/dashboard/sparkline";
 import { CheckInventoryButton } from "@/components/dashboard/check-inventory-button";
 import { OnboardingBanner, type OnboardingStep } from "@/components/dashboard/onboarding-banner";
 import { WelcomeNotification } from "@/components/dashboard/welcome-notification";
-import type { Order, SellerStore } from "@/types/seller";
+import type { Order } from "@/types/seller";
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -30,8 +29,7 @@ function timeAgo(iso: string): string {
 }
 
 export default async function DashboardOverviewPage() {
-  const seller = await requireSeller();
-  const store = (await getActiveStoreForSeller(seller.id)) as SellerStore | null;
+  const store = await requireActiveStore();
   if (!store) {
     return (
       <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-ink/15 p-12 text-center">

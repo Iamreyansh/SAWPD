@@ -3,7 +3,8 @@ import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "crypto";
 import { redirect } from "next/navigation";
 import { findSellerById } from "@/lib/sellers";
-import type { PublicSeller } from "@/types/seller";
+import { getActiveStoreForSeller } from "@/lib/store";
+import type { PublicSeller, SellerStore } from "@/types/seller";
 
 const COOKIE_NAME = "sawpd_seller";
 const ACTIVE_STORE_COOKIE = "sawpd_active_store";
@@ -130,4 +131,19 @@ export async function getActiveStoreSlugFromCookie(): Promise<string | null> {
     return null;
   }
   return slug;
+}
+
+/**
+ * Returns the active store for the current seller.
+ * Reads the cookie, validates ownership, falls back to first store.
+ * Redirects to login if not authenticated.
+ */
+export async function requireActiveStore(): Promise<SellerStore> {
+  const seller = await requireSeller();
+  const cookieSlug = await getActiveStoreSlugFromCookie();
+  const store =
+    (cookieSlug ? await getActiveStoreForSeller(seller.id, cookieSlug) : null) ??
+    (await getActiveStoreForSeller(seller.id));
+  if (!store) redirect("/apply");
+  return store;
 }

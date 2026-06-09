@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { requireSeller } from "@/lib/seller-auth";
-import { getActiveStoreForSeller } from "@/lib/store";
+import { requireActiveStore } from "@/lib/seller-auth";
 import { listPromosForStore } from "@/lib/promos";
 import { PromotionsClient } from "@/components/dashboard/promotions-client";
 
@@ -11,8 +10,7 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function PromotionsPage() {
-  const seller = await requireSeller();
-  const store = await getActiveStoreForSeller(seller.id);
+  const store = await requireActiveStore();
   if (!store) {
     return (
       <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-ink/15 p-12 text-center">
