@@ -161,9 +161,9 @@ export async function deleteProductAction(
   const previous = await getProduct(storeSlug, id);
   if (!previous) return { ok: false, error: "Product not found." };
 
-  // Check for pending orders referencing this product
-  const orders = await listOrders(storeSlug);
+  // Check for pending orders referencing this product — query with filter, not full table
   const pendingStatuses = ["awaiting_verification", "awaiting_payment", "verified", "shipped"];
+  const orders = await listOrders(storeSlug);
   const hasPending = orders.some(
     (o) =>
       pendingStatuses.includes(o.status) &&

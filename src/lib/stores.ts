@@ -1,8 +1,8 @@
 import "server-only";
 import { listStores } from "@/lib/store";
 import type { SellerStore } from "@/types/seller";
-import { listOrders } from "@/lib/orders";
-import { listProductsForStore } from "@/lib/products";
+import { countOrders } from "@/lib/orders";
+import { countProducts } from "@/lib/products";
 import { getTrialState } from "@/lib/trial";
 
 export type StoreSummary = {
@@ -18,15 +18,15 @@ export async function listStoreSummaries(): Promise<StoreSummary[]> {
   const stores = await listStores();
   const out: StoreSummary[] = [];
   for (const store of stores) {
-    const [orders, products] = await Promise.all([
-      listOrders(store.slug),
-      listProductsForStore(store.slug),
+    const [orderCount, productCount] = await Promise.all([
+      countOrders(store.slug),
+      countProducts(store.slug),
     ]);
     const trial = getTrialState(store);
     out.push({
       store,
-      orderCount: orders.length,
-      productCount: products.length,
+      orderCount,
+      productCount,
       open: trial.active,
       planLabel: trial.planLabel,
       daysLeft: trial.daysLeft,

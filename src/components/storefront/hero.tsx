@@ -38,14 +38,7 @@ export function Hero({ kicker, headline, sub, imageUrl, imageAlt }: HeroProps) {
             transition={{ duration: 1.4, ease: lineEase }}
             className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl"
           >
-            <Image
-              src={imageUrl}
-              alt={imageAlt}
-              fill
-              priority
-              sizes="100vw"
-              className="object-cover"
-            />
+            {/* Use CSS background-image only on mobile — avoids loading duplicate <Image> */}
             <motion.div
               initial={{ scale: 1 }}
               animate={{ scale: 1.06 }}

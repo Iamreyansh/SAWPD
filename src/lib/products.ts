@@ -75,20 +75,69 @@ export async function listProductsForStore(slug: string): Promise<Product[]> {
   return data.map(rowToProduct).filter((p): p is Product => p !== null);
 }
 
+/**
+ * List only publicly visible products — filters at DB level.
+ * Excludes drafts, archived, and future-scheduled products.
+ */
 export async function listLiveProductsForStore(slug: string): Promise<Product[]> {
-  const all = await listProductsForStore(slug);
-  return all.filter((p) => isPubliclyVisible(p));
+  const sb = createAdminClient();
+  const now = new Date().toISOString();
+  const { data, error } = await sb
+    .from("products")
+    .select("*")
+    .eq("store_slug", slug)
+    .or(`status.eq.live,and(status.eq.scheduled,scheduled_for.lte.${now}),and(status.is.null)`);
+  if (error || !data) return [];
+  return data.map(rowToProduct).filter((p): p is Product => p !== null);
+}
+
+/**
+ * Count products for a store — single aggregate query, no data transfer.
+ */
+export async function countProducts(slug: string): Promise<number> {
+  const sb = createAdminClient();
+  const { count } = await sb
+    .from("products")
+    .select("id", { count: "exact", head: true })
+    .eq("store_slug", slug);
+  return count ?? 0;
+}
+
+/**
+ * Get specific products by IDs — for checkout price validation.
+ * Avoids loading ALL products just to validate a few cart items.
+ */
+export async function getProductsByIds(
+  slug: string,
+  ids: string[]
+): Promise<Product[]> {
+  if (ids.length === 0) return [];
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("products")
+    .select("*")
+    .eq("store_slug", slug)
+    .in("id", ids);
+  if (error || !data) return [];
+  return data.map(rowToProduct).filter((p): p is Product => p !== null);
 }
 
 export async function countProductsByStatus(
   slug: string
 ): Promise<{ live: number; draft: number; scheduled: number; archived: number }> {
-  const all = await listProductsForStore(slug);
+  const sb = createAdminClient();
   const counts = { live: 0, draft: 0, scheduled: 0, archived: 0 };
-  for (const p of all) {
-    const s = p.status ?? "live";
-    counts[s] += 1;
-  }
+  const statuses = ["live", "draft", "scheduled", "archived"] as const;
+  await Promise.all(
+    statuses.map(async (status) => {
+      const { count } = await sb
+        .from("products")
+        .select("id", { count: "exact", head: true })
+        .eq("store_slug", slug)
+        .eq("status", status);
+      counts[status] = count ?? 0;
+    })
+  );
   return counts;
 }
 

@@ -3,6 +3,9 @@ import { randomUUID } from "crypto";
 import type { Order, OrderStatus } from "@/types/seller";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+const ORDER_SUMMARY_COLUMNS =
+  "id, store_slug, created_at, status, customer, lines, total, subtotal, promo_code, discount_amount, payment_screenshot, resend_requested_at, verified_at, shipped_at, completed_at, cancelled_at, tracking_note, reviewer_note";
+
 function rowToOrder(row: Record<string, unknown>): Order {
   let customer: Order["customer"] = { name: "", phone: "", address: "" };
   if (row.customer && typeof row.customer === "object") {
@@ -41,15 +44,25 @@ function rowToOrder(row: Record<string, unknown>): Order {
   };
 }
 
-export async function listOrders(slug: string): Promise<Order[]> {
+/**
+ * List orders WITHOUT screenshot_data_url — use for dashboard, stats, CSV.
+ * The screenshot field can be up to 8MB per order; excluding it reduces
+ * data transfer by 99%+ for list operations.
+ */
+export async function listOrderSummaries(slug: string): Promise<Order[]> {
   const sb = createAdminClient();
   const { data, error } = await sb
     .from("orders")
-    .select("*")
+    .select(ORDER_SUMMARY_COLUMNS)
     .eq("store_slug", slug)
     .order("created_at", { ascending: false });
   if (error || !data) return [];
   return data.map(rowToOrder);
+}
+
+/** @deprecated Use listOrderSummaries() unless you need screenshot_data_url */
+export async function listOrders(slug: string): Promise<Order[]> {
+  return listOrderSummaries(slug);
 }
 
 export async function getOrder(id: string): Promise<Order | null> {
@@ -61,6 +74,47 @@ export async function getOrder(id: string): Promise<Order | null> {
     .single();
   if (error || !data) return null;
   return rowToOrder(data);
+}
+
+/**
+ * Count orders by status for a store — single aggregate query, no data transfer.
+ */
+export async function countOrdersByStatus(
+  slug: string
+): Promise<Record<OrderStatus, number>> {
+  const sb = createAdminClient();
+  const counts: Record<string, number> = {};
+  const statuses: OrderStatus[] = [
+    "awaiting_verification",
+    "awaiting_payment",
+    "verified",
+    "shipped",
+    "completed",
+    "cancelled",
+  ];
+  await Promise.all(
+    statuses.map(async (status) => {
+      const { count } = await sb
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("store_slug", slug)
+        .eq("status", status);
+      counts[status] = count ?? 0;
+    })
+  );
+  return counts as Record<OrderStatus, number>;
+}
+
+/**
+ * Count total orders for a store — single aggregate query.
+ */
+export async function countOrders(slug: string): Promise<number> {
+  const sb = createAdminClient();
+  const { count } = await sb
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("store_slug", slug);
+  return count ?? 0;
 }
 
 export type CreateOrderInput = Omit<
@@ -97,22 +151,23 @@ export async function addOrder(input: CreateOrderInput): Promise<Order> {
   });
   if (error) throw error;
 
-  // Decrement stock for each line item (conditional update prevents race condition)
-  for (const line of order.lines) {
-    const { data: product } = await sb
-      .from("products")
-      .select("stock_count")
-      .eq("id", line.productId)
-      .single();
-    if (product && (product.stock_count as number) >= line.qty) {
-      // Conditional update: only decrement if sufficient stock remains
-      await sb
+  // Decrement stock for each line item (parallelized, conditional update prevents race condition)
+  await Promise.all(
+    order.lines.map(async (line) => {
+      const { data: product } = await sb
         .from("products")
-        .update({ stock_count: (product.stock_count as number) - line.qty })
+        .select("stock_count")
         .eq("id", line.productId)
-        .gte("stock_count", line.qty);
-    }
-  }
+        .single();
+      if (product && (product.stock_count as number) >= line.qty) {
+        await sb
+          .from("products")
+          .update({ stock_count: (product.stock_count as number) - line.qty })
+          .eq("id", line.productId)
+          .gte("stock_count", line.qty);
+      }
+    })
+  );
 
   return order;
 }

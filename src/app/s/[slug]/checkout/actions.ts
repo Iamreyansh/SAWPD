@@ -11,7 +11,8 @@ import type { OrderLine } from "@/types/seller";
 import { checkoutLimiter } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/get-ip";
 import { requireCaptcha } from "@/lib/captcha";
-import { listProductsForStore } from "@/lib/products";
+import { getProductsByIds } from "@/lib/products";
+import { revalidatePath } from "next/cache";
 
 const customerSchema = z.object({
   name: z.string().min(2),
@@ -102,8 +103,9 @@ export async function placeOrder(
     };
   }
 
-  // Server-side price validation: verify prices match DB
-  const dbProducts = await listProductsForStore(data.storeSlug);
+  // Server-side price validation: only fetch the specific products in the cart
+  const productIds = data.lines.map((l) => l.productId);
+  const dbProducts = await getProductsByIds(data.storeSlug, productIds);
   const productMap = new Map(dbProducts.map((p) => [p.id, p]));
   let serverSubtotal = 0;
   for (const line of data.lines) {
@@ -162,5 +164,10 @@ export async function placeOrder(
     customerName: order.customer.name,
     total: order.total,
   });
+  revalidatePath(`/s/${data.storeSlug}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/orders");
+  revalidatePath("/dashboard/customers");
+  revalidatePath("/admin");
   return { ok: true, orderId: order.id };
 }
