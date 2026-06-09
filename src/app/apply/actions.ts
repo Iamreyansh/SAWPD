@@ -71,6 +71,13 @@ export async function submitApplication(
     if (captchaError) return { ok: false, error: captchaError };
 
     const seller = await getCurrentSeller();
+    // Session expired mid-form — user created account but cookie is gone
+    if (!seller) {
+      return {
+        ok: false,
+        error: "Your session expired. Please log in again and resubmit your application.",
+      };
+    }
     // Prevent duplicate applications if seller already has a shop
     if (seller) {
       const existingStores = await getStoresForSeller(seller.id);

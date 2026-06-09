@@ -66,9 +66,9 @@ export async function sellerSignupAction(input: unknown): Promise<SellerAuthResu
     const captchaError = await requireCaptcha(parsed.data.captchaToken);
     if (captchaError) return { ok: false, error: captchaError };
 
-    // Password strength check
+    // Password strength check — reject anything that's not strong
     const { strength, errors } = checkPasswordStrength(parsed.data.password);
-    if (strength === "weak") {
+    if (strength !== "strong") {
       return {
         ok: false,
         error: "Password is too weak.",
