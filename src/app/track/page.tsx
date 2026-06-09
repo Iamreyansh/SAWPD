@@ -11,17 +11,20 @@ export const metadata = {
 
 export default async function TrackPage() {
   // Surface 1–2 recent demo orders so first-time visitors can try the flow
-  // without needing to remember a real order ID. Production users get an
-  // empty list. Phone numbers are masked for privacy.
-  const all = await listOrders("riya");
-  const demos: DemoOrder[] = all
-    .slice(0, 2)
-    .map((o) => ({
-      id: o.id,
-      phone: maskPhone(o.customer.phone),
-      status: o.status,
-      createdAt: o.createdAt,
-    }));
+  // without needing to remember a real order ID. Only in development.
+  // Phone numbers are masked for privacy.
+  let demos: DemoOrder[] = [];
+  if (process.env.NODE_ENV === "development") {
+    const all = await listOrders("riya");
+    demos = all
+      .slice(0, 2)
+      .map((o) => ({
+        id: o.id,
+        phone: maskPhone(o.customer.phone),
+        status: o.status,
+        createdAt: o.createdAt,
+      }));
+  }
 
   return (
     <main className="container-editorial flex min-h-[80vh] flex-col items-center justify-center py-16">

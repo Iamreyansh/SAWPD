@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useParams } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useCartStore } from "@/store/cart-store";
@@ -18,6 +19,7 @@ export function ProductCard({ product, index }: Props) {
   const add = useCartStore((s) => s.add);
   const openProduct = useUiStore((s) => s.openProduct);
   const { toast } = useToast();
+  const params = useParams();
   const reducedMotion = useReducedMotion();
   // Tracks post-mount decisions only. Starts false so the SSR and the
   // first client render are identical (avoids hydration mismatch), then
@@ -48,7 +50,7 @@ export function ProductCard({ product, index }: Props) {
   // by default; no opacity:0 surprise for scrapers, reduced-motion
   // users, or slow scrollers.
   if (mounted && skipAnimate) {
-    return <div className="group">{renderCard({ product, isLowStock, isSoldOut, isOnSale, add, openProduct, toast })}</div>;
+    return <div className="group">{renderCard({ product, isLowStock, isSoldOut, isOnSale, add, openProduct, toast, storeSlug: params.slug as string })}</div>;
   }
 
   return (
@@ -60,7 +62,7 @@ export function ProductCard({ product, index }: Props) {
       className="group"
       data-animate-up={mounted ? "true" : undefined}
     >
-      {renderCard({ product, isLowStock, isSoldOut, isOnSale, add, openProduct, toast })}
+      {renderCard({ product, isLowStock, isSoldOut, isOnSale, add, openProduct, toast, storeSlug: params.slug as string })}
     </motion.div>
   );
 }
@@ -70,9 +72,10 @@ type RenderArgs = {
   isLowStock: boolean;
   isSoldOut: boolean;
   isOnSale: boolean;
-  add: (id: string, qty: number) => void;
+  add: (id: string, qty: number, storeSlug?: string) => void;
   openProduct: (id: string) => void;
   toast: (t: { title: string; description?: string }) => void;
+  storeSlug: string;
 };
 
 function renderCard({
@@ -83,6 +86,7 @@ function renderCard({
   add,
   openProduct,
   toast,
+  storeSlug,
 }: RenderArgs) {
   return (
     <>
@@ -146,7 +150,7 @@ function renderCard({
                   });
                   return;
                 }
-                add(product.id, 1);
+                add(product.id, 1, storeSlug);
                 if (typeof navigator !== "undefined" && "vibrate" in navigator) {
                   navigator.vibrate(8);
                 }

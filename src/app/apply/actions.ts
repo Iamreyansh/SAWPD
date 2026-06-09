@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { addApplication } from "@/lib/applications";
 import { getCurrentSeller } from "@/lib/seller-auth";
+import { getStoresForSeller } from "@/lib/store";
 import { notifyApplicationReceived } from "@/lib/notify";
 import type { ApplicationInput } from "@/types/applications";
 import { formLimiter } from "@/lib/rate-limit";
@@ -71,6 +72,16 @@ export async function submitApplication(
     if (captchaError) return { ok: false, error: captchaError };
 
     const seller = await getCurrentSeller();
+    // Prevent duplicate applications if seller already has a shop
+    if (seller) {
+      const existingStores = await getStoresForSeller(seller.id);
+      if (existingStores.length > 0) {
+        return {
+          ok: false,
+          error: "You already have a shop. Please visit your dashboard to apply for an additional shop.",
+        };
+      }
+    }
     const app = await addApplication(parsed.data as ApplicationInput, {
       sellerId: seller?.id,
     });

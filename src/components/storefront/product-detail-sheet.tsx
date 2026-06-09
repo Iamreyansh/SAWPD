@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useParams } from "next/navigation";
 import { Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
@@ -27,6 +28,7 @@ export function ProductDetailSheet({ products }: Props) {
   const add = useCartStore((s) => s.add);
   const items = useCartStore((s) => s.items);
   const { toast } = useToast();
+  const params = useParams();
 
   const product = products.find((p) => p.id === productId) ?? null;
   const [qty, setQty] = useState(1);
@@ -212,7 +214,7 @@ export function ProductDetailSheet({ products }: Props) {
                 className="w-full"
                 disabled={maxAddable === 0}
                 onClick={() => {
-                  add(product.id, qty);
+                  add(product.id, qty, params.slug as string);
                   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
                     navigator.vibrate(10);
                   }
