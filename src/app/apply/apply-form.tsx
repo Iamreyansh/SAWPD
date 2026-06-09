@@ -401,7 +401,7 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
                   </div>
                   <p className="text-[12px] text-ink/45">
                     Already have an account?{" "}
-                    <Link href="/seller/login" className="font-semibold text-vermillion hover:underline">
+                    <Link href="/seller/login?redirect=/apply" className="font-semibold text-vermillion hover:underline">
                       Log in instead
                     </Link>
                   </p>
