@@ -8,7 +8,7 @@ import {
   getProduct,
   updateProduct,
 } from "@/lib/products";
-import { getOrder, updateOrderStatus } from "@/lib/orders";
+import { getOrder, listOrders, updateOrderStatus } from "@/lib/orders";
 import { activatePlanMock, getStoreForSeller, updateStore } from "@/lib/store";
 import { requireActiveStore, requireSeller } from "@/lib/seller-auth";
 import { deleteUploadIfLocal, uploadProductImage, uploadHeroImage } from "@/lib/uploads";
@@ -159,12 +159,27 @@ export async function deleteProductAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const sellerId = await assertOwnsStore(storeSlug);
   const previous = await getProduct(storeSlug, id);
+  if (!previous) return { ok: false, error: "Product not found." };
+
+  // Check for pending orders referencing this product
+  const orders = await listOrders(storeSlug);
+  const pendingStatuses = ["awaiting_verification", "awaiting_payment", "verified", "shipped"];
+  const hasPending = orders.some(
+    (o) =>
+      pendingStatuses.includes(o.status) &&
+      o.lines.some((l) => l.productId === id)
+  );
+  if (hasPending) {
+    return {
+      ok: false,
+      error: "Cannot delete product — it has pending or active orders. Fulfil or cancel those orders first.",
+    };
+  }
+
   const ok = await deleteProduct(storeSlug, id);
   if (!ok) return { ok: false, error: "Product not found." };
-  if (previous) {
-    for (const img of previous.images) {
-      await deleteUploadIfLocal(img.url);
-    }
+  for (const img of previous.images) {
+    await deleteUploadIfLocal(img.url);
   }
   void sellerId;
   revalidatePath("/dashboard");
