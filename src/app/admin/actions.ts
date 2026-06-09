@@ -91,6 +91,12 @@ export async function decideAction(input: unknown): Promise<DecisionResult> {
   if (!original) {
     return { ok: false, error: "Application not found." };
   }
+  if (original.status !== "pending") {
+    return {
+      ok: false,
+      error: `Application has already been ${original.status}. No changes made.`,
+    };
+  }
   if (parsed.data.decision === "approved") {
     if (!original.sellerId) {
       return {
