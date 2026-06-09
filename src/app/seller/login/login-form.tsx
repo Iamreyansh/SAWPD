@@ -26,13 +26,17 @@ export function LoginForm() {
       password: String(formData.get("password") ?? ""),
     };
     startTransition(async () => {
-      const result: SellerAuthResult = await sellerLoginAction(input);
-      if (result.ok) {
-        router.push(redirectTo);
-        router.refresh();
-      } else {
-        setError(result.error);
-        if (result.fieldErrors) setFieldErrors(result.fieldErrors);
+      try {
+        const result: SellerAuthResult = await sellerLoginAction(input);
+        if (result.ok) {
+          router.push(redirectTo);
+          router.refresh();
+        } else {
+          setError(result.error);
+          if (result.fieldErrors) setFieldErrors(result.fieldErrors);
+        }
+      } catch {
+        setError("Network error. Please check your connection and try again.");
       }
     });
   }

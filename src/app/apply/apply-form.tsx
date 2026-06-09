@@ -178,25 +178,29 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
     if (!signedIn && step === 0 && !accountCreated) {
       setError(null);
       startTransition(async () => {
-        const result: SellerAuthResult = await sellerSignupAction({
-          email: form.accountEmail.trim(),
-          password: form.accountPassword,
-        });
-        if (result.ok) {
-          setAccountCreated(true);
-          setStep(1);
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        } else {
-          setError(result.error);
-          if (result.fieldErrors) {
-            const mapped: Record<string, string> = {};
-            for (const [k, v] of Object.entries(result.fieldErrors)) {
-              if (k === "email") mapped.accountEmail = v;
+        try {
+          const result: SellerAuthResult = await sellerSignupAction({
+            email: form.accountEmail.trim(),
+            password: form.accountPassword,
+          });
+          if (result.ok) {
+            setAccountCreated(true);
+            setStep(1);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          } else {
+            setError(result.error);
+            if (result.fieldErrors) {
+              const mapped: Record<string, string> = {};
+              for (const [k, v] of Object.entries(result.fieldErrors)) {
+                if (k === "email") mapped.accountEmail = v;
               else if (k === "password") mapped.accountPassword = v;
               else mapped[k] = v;
             }
             setFieldErrors(mapped);
           }
+        }
+        } catch {
+          setError("Network error. Please check your connection and try again.");
         }
       });
       return;
@@ -259,32 +263,36 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
       motivation: form.motivation || undefined,
     };
     startTransition(async () => {
-      const result: ApplyResult = await submitApplication(payload);
-      if (result.ok) {
-        setSubmittedId(result.id);
-        setSubmittedEmail(String(payload.email));
-        try {
-          window.localStorage.removeItem(DRAFT_KEY);
-          window.localStorage.setItem(
-            SUBMITTED_KEY,
-            JSON.stringify({ id: result.id, email: String(payload.email) })
-          );
-        } catch {
-          // ignore
+      try {
+        const result: ApplyResult = await submitApplication(payload);
+        if (result.ok) {
+          setSubmittedId(result.id);
+          setSubmittedEmail(String(payload.email));
+          try {
+            window.localStorage.removeItem(DRAFT_KEY);
+            window.localStorage.setItem(
+              SUBMITTED_KEY,
+              JSON.stringify({ id: result.id, email: String(payload.email) })
+            );
+          } catch {
+            // ignore
+          }
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else {
+          setError(result.error);
+          if (result.fieldErrors) setFieldErrors(result.fieldErrors);
+          // Find which step has the error and go there
+          const errFields = Object.keys(result.fieldErrors ?? {});
+          const youFields = ["fullName", "instagramHandle", "email", "phone"];
+          const shopFields = ["storeName", "niche"];
+          if (errFields.some((f) => shopFields.includes(f))) {
+            setStep(signedIn ? 1 : 2);
+          } else if (errFields.some((f) => youFields.includes(f))) {
+            setStep(signedIn ? 0 : 1);
+          }
         }
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      } else {
-        setError(result.error);
-        if (result.fieldErrors) setFieldErrors(result.fieldErrors);
-        // Find which step has the error and go there
-        const errFields = Object.keys(result.fieldErrors ?? {});
-        const youFields = ["fullName", "instagramHandle", "email", "phone"];
-        const shopFields = ["storeName", "niche"];
-        if (errFields.some((f) => shopFields.includes(f))) {
-          setStep(signedIn ? 1 : 2);
-        } else if (errFields.some((f) => youFields.includes(f))) {
-          setStep(signedIn ? 0 : 1);
-        }
+      } catch {
+        setError("Network error. Please check your connection and try again.");
       }
     });
   }
