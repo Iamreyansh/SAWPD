@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Search, X } from "lucide-react";
@@ -54,7 +54,7 @@ export function ProductGrid({ products }: { products: Product[] }) {
     );
   }, [products, active, query]);
 
-  function writeParams(tag: Tag | "all", q: string) {
+  const writeParams = useCallback((tag: Tag | "all", q: string) => {
     const sp = new URLSearchParams(params.toString());
     if (tag === "all") sp.delete("tag");
     else sp.set("tag", tag);
@@ -64,14 +64,25 @@ export function ProductGrid({ products }: { products: Product[] }) {
     startTransition(() => {
       router.replace(qs ? `?${qs}` : "?", { scroll: false });
     });
-  }
+  }, [params, router, startTransition]);
 
-  const setTag = (tag: Tag | "all") => writeParams(tag, query);
+  const setTag = useCallback((tag: Tag | "all") => writeParams(tag, query), [writeParams, query]);
 
-  const onQueryChange = (next: string) => {
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onQueryChange = useCallback((next: string) => {
     setQuery(next);
-    writeParams(active, next);
-  };
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      writeParams(active, next);
+    }, 300);
+  }, [active, writeParams]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   const counts = useMemo(() => {
     const c: Record<Tag | "all", number> = {

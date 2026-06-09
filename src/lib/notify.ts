@@ -85,6 +85,15 @@ async function deliver(n: Notification): Promise<void> {
   }
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function buildHtmlEmail(n: Notification): string {
   return `
 <!DOCTYPE html>
@@ -99,9 +108,9 @@ function buildHtmlEmail(n: Notification): string {
       <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:2px;">SAWPD</span>
     </div>
     <div style="padding:32px;">
-      <p style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#999;">${kindToLabel(n.kind)}</p>
-      <h2 style="margin:0 0 24px;font-size:20px;font-weight:600;">${n.subject}</h2>
-      <div style="font-size:15px;line-height:1.6;color:#444;white-space:pre-wrap;">${n.body}</div>
+      <p style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#999;">${escapeHtml(kindToLabel(n.kind))}</p>
+      <h2 style="margin:0 0 24px;font-size:20px;font-weight:600;">${escapeHtml(n.subject)}</h2>
+      <div style="font-size:15px;line-height:1.6;color:#444;white-space:pre-wrap;">${escapeHtml(n.body)}</div>
     </div>
     <div style="padding:16px 32px;background:#f9f9f6;border-top:1px solid #eee;">
       <p style="margin:0;font-size:12px;color:#999;">SAWPD — storefronts for Instagram creators</p>

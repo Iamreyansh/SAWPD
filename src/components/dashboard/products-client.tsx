@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -71,6 +72,7 @@ type Props = {
 };
 
 export function ProductsClient({ storeSlug, products }: Props) {
+  const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -86,6 +88,7 @@ export function ProductsClient({ storeSlug, products }: Props) {
   const onDelete = async (id: string, title: string) => {
     if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
     await deleteProductAction(storeSlug, id);
+    router.refresh();
   };
 
   return (
@@ -553,7 +556,7 @@ function ProductFormSheet({
                 type="button"
                 variant="outline"
                 size="default"
-                onClick={() => onOpenChange(false)}
+                onClick={onClose}
                 disabled={pending}
                 className="flex-1"
               >

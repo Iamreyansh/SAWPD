@@ -179,6 +179,8 @@ export async function uploadProductImageAction(
   | { ok: true; url: string; filename: string }
   | { ok: false; error: string }
 > {
+  const seller = await requireSeller();
+  if (!seller) return { ok: false, error: "Not authenticated." };
   const file = formData.get("file");
   if (!(file instanceof File)) {
     return { ok: false, error: "No file received." };
@@ -192,6 +194,8 @@ export async function uploadHeroImageAction(
   | { ok: true; url: string; filename: string }
   | { ok: false; error: string }
 > {
+  const seller = await requireSeller();
+  if (!seller) return { ok: false, error: "Not authenticated." };
   const file = formData.get("file");
   if (!(file instanceof File)) {
     return { ok: false, error: "No file received." };
@@ -275,19 +279,6 @@ export async function requestResendAction(
     status: "awaiting_payment",
   });
   if (!updated) return { ok: false, error: "Order not found." };
-  const { getStoreForSeller } = await import("@/lib/store");
-  const { notifyOrderStatusChanged } = await import("@/lib/notify");
-  const store = await getStoreForSeller(updated.storeSlug, seller.id);
-  if (store) {
-    await notifyOrderStatusChanged({
-      storeName: store.name,
-      storeEmail: store.notifyEmail || undefined,
-      orderId: updated.id,
-      customerName: updated.customer.name,
-      status: "cancelled",
-      trackingNote: "Asked customer to re-upload screenshot.",
-    });
-  }
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/orders");
   revalidatePath(`/dashboard/orders/${parsed.data.orderId}`);

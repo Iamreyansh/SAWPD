@@ -12,13 +12,13 @@ export const metadata = {
 export default async function TrackPage() {
   // Surface 1–2 recent demo orders so first-time visitors can try the flow
   // without needing to remember a real order ID. Production users get an
-  // empty list.
+  // empty list. Phone numbers are masked for privacy.
   const all = await listOrders("riya");
   const demos: DemoOrder[] = all
     .slice(0, 2)
     .map((o) => ({
       id: o.id,
-      phone: o.customer.phone,
+      phone: maskPhone(o.customer.phone),
       status: o.status,
       createdAt: o.createdAt,
     }));
@@ -30,4 +30,10 @@ export default async function TrackPage() {
       </Suspense>
     </main>
   );
+}
+
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 4) return phone;
+  return "XXXXXX" + digits.slice(-4);
 }

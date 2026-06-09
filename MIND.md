@@ -236,6 +236,46 @@ log entry and mark it done in PLAN.md.
   - **Not yet configured** — user deferred Cloudflare account setup to next session. CAPTCHA is optional; app works without it.
   - `pnpm typecheck` + `pnpm lint` pass.
 
+- **Set 25 (2026-06-09) — Production bug fixes + security hardening**
+  - **Apply form rewrite** (`src/app/apply/apply-form.tsx`):
+    - Fixed step rendering bug: "You" fields were showing on every step for signed-out users. Now each step shows only its correct fields.
+    - Fixed "stuck after signup" bug: Added `accountCreated` state to track signup progress. After account creation, step 0 is skipped on refresh and back navigation.
+    - Removed plaintext password from localStorage draft: Password is no longer saved to `DRAFT_KEY`. Draft version bumped to `v4`.
+    - Fixed submission error navigation: Now navigates to the correct step containing the error field instead of always resetting to step 0.
+    - Fixed back button: Prevents navigating back to Account step after account creation.
+  - **Checkout security** (`src/app/s/[slug]/checkout/actions.ts`):
+    - Added server-side price validation: Verifies product prices and stock against database before placing order. Rejects orders with price mismatches or insufficient stock.
+    - Added stock availability check: Validates `line.qty <= dbProduct.stockCount` for each item.
+  - **Upload auth** (`src/app/dashboard/actions.ts`):
+    - Added `requireSeller()` auth check to `uploadProductImageAction` and `uploadHeroImageAction`. Previously these were unauthenticated.
+  - **Checkout paused store** (`src/app/s/[slug]/checkout/page.tsx`):
+    - Added `isStoreOpen()` check on page render. Previously customers could fill the entire checkout form before getting a "shop paused" error on submit.
+  - **Request resend notification** (`src/app/dashboard/actions.ts`):
+    - Fixed `requestResendAction` which was sending "cancelled" notification for `awaiting_payment` status change. Removed the incorrect notification.
+  - **Product form fixes** (`src/components/dashboard/products-client.tsx`):
+    - Fixed Cancel button: Was calling `onOpenChange(false)` which was a no-op. Now calls `onClose()` directly.
+    - Fixed product delete: Added `router.refresh()` after deletion so the product list updates immediately.
+  - **Stock limits** (`src/components/storefront/product-card.tsx`):
+    - Quick-add now checks current cart quantity against `stockCount`. Shows "Max stock reached" toast when limit is hit.
+  - **Checkout amount display** (`src/app/s/[slug]/checkout/checkout-client.tsx`):
+    - "Amount" section now shows `finalTotal` (post-discount) instead of `subtotal` (pre-discount). Shows promo breakdown when discount is applied.
+  - **Search debounce** (`src/components/storefront/product-grid.tsx`):
+    - Added 300ms debounce to search input to prevent excessive router.replace calls on every keystroke.
+  - **Email HTML injection** (`src/lib/notify.ts`):
+    - Added `escapeHtml()` helper to sanitize user-provided content in email templates. All interpolated values are now escaped.
+  - **Demo phone privacy** (`src/app/track/page.tsx`):
+    - Masked customer phone numbers in demo order data. Shows `XXXXXX1234` instead of full numbers.
+  - **UI improvements** (from earlier session):
+    - Password validation: Now requires uppercase + 2 digits + 1 symbol (min 8 chars).
+    - Phone fields: Auto-prepend +91 if missing.
+    - Instagram handles: Auto-prepend @ on blur/submit.
+    - Pricing cards: Fixed CTA alignment with `mt-8` + `flex-1`.
+    - Apply again: Removed until admin decides.
+    - Optional sales fields added to apply form (followers, cadence, etc.).
+    - Home button added to `/shops` page.
+    - Handle truncation fixed on storefront header.
+  - `pnpm typecheck` + `pnpm lint` pass.
+
 - **Set 1 (2026-06-06) — Cleanup**
   - Deleted empty stubs: `src/supabase/`, `src/components/layout/`.
   - Removed `Supabase` comment from `.gitignore`.

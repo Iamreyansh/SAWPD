@@ -372,8 +372,13 @@ export function CheckoutClient({ store, products }: Props) {
               <div>
                 <p className="eyebrow-ink">Amount</p>
                 <p className="mt-2 text-2xl font-bold tabular-nums tracking-[-0.02em] text-ink">
-                  {formatINR(subtotal)}
+                  {formatINR(finalTotal)}
                 </p>
+                {discountAmount > 0 && (
+                  <p className="mt-1 text-[12px] text-vermillion">
+                    {formatINR(subtotal)} − {formatINR(discountAmount)} promo
+                  </p>
+                )}
               </div>
               <div>
                 <p className="eyebrow-ink">Paying to</p>

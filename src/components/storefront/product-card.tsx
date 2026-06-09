@@ -137,6 +137,15 @@ function renderCard({
               tabIndex={-1}
               onClick={(e) => {
                 e.stopPropagation();
+                const cartItems = useCartStore.getState().items;
+                const currentQty = cartItems.find((i) => i.productId === product.id)?.qty ?? 0;
+                if (currentQty >= product.stockCount) {
+                  toast({
+                    title: "Max stock reached",
+                    description: `Only ${product.stockCount} available`,
+                  });
+                  return;
+                }
                 add(product.id, 1);
                 if (typeof navigator !== "undefined" && "vibrate" in navigator) {
                   navigator.vibrate(8);

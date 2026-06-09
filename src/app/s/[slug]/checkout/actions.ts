@@ -11,6 +11,7 @@ import type { OrderLine } from "@/types/seller";
 import { checkoutLimiter } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/get-ip";
 import { requireCaptcha } from "@/lib/captcha";
+import { listProductsForStore } from "@/lib/products";
 
 const customerSchema = z.object({
   name: z.string().min(2),
@@ -93,6 +94,29 @@ export async function placeOrder(
       error:
         "This shop is currently paused. Please contact the seller directly.",
     };
+  }
+
+  // Server-side price validation: verify prices match DB
+  const dbProducts = await listProductsForStore(data.storeSlug);
+  const productMap = new Map(dbProducts.map((p) => [p.id, p]));
+  let serverSubtotal = 0;
+  for (const line of data.lines) {
+    const dbProduct = productMap.get(line.productId);
+    if (!dbProduct) {
+      return { ok: false, error: `Product "${line.title}" is no longer available.` };
+    }
+    if (!dbProduct.isAvailable) {
+      return { ok: false, error: `Product "${line.title}" is out of stock.` };
+    }
+    if (line.qty > dbProduct.stockCount) {
+      return { ok: false, error: `Only ${dbProduct.stockCount} of "${line.title}" available.` };
+    }
+    // Use DB price, not client-sent price
+    serverSubtotal += dbProduct.price * line.qty;
+  }
+  // Verify subtotal matches (within 1 rupee tolerance for rounding)
+  if (Math.abs(data.subtotal - serverSubtotal) > 1) {
+    return { ok: false, error: "Cart total mismatch. Please refresh and try again." };
   }
 
   let discountAmount = 0;
