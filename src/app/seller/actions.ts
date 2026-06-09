@@ -166,6 +166,11 @@ export async function setActiveStoreAction(slug: string): Promise<void> {
   }
   await setActiveStoreSlug(slug);
   revalidatePath("/dashboard");
-  revalidatePath(`/dashboard/`);
+  revalidatePath("/dashboard/orders");
+  revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard/promotions");
+  revalidatePath("/dashboard/customers");
+  revalidatePath("/dashboard/returns");
+  revalidatePath("/dashboard/settings");
   redirect("/dashboard");
 }

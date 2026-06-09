@@ -226,7 +226,7 @@ export async function applyPromo(
     return { ok: false, error: "Code not applicable to this order." };
   }
 
-  // Atomic increment via Supabase RPC-style update
+  // Atomic increment: only update if usage_count < usage_limit
   const sb = createAdminClient();
   const { data: fresh, error: fetchErr } = await sb
     .from("promos")
@@ -237,11 +237,15 @@ export async function applyPromo(
   if (fresh.usage_limit != null && fresh.usage_count >= fresh.usage_limit) {
     return { ok: false, error: "This code has reached its limit." };
   }
-  const { error: updateErr } = await sb
+  // Use a conditional update to prevent race conditions
+  const { data: updated, error: updateErr } = await sb
     .from("promos")
     .update({ usage_count: fresh.usage_count + 1 })
-    .eq("id", promo.id);
-  if (updateErr) return { ok: false, error: "Failed to apply code." };
+    .eq("id", promo.id)
+    .lt("usage_count", fresh.usage_limit ?? 999999)
+    .select("id")
+    .single();
+  if (updateErr || !updated) return { ok: false, error: "Code is no longer available (limit reached)." };
 
   return { ok: true, discountAmount, promoCode: promo.code };
 }
