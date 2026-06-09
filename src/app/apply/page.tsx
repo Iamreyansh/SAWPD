@@ -15,7 +15,7 @@ export default async function ApplyPage() {
   const hasShop = stores.length > 0;
 
   if (seller && hasShop) {
-    return <AlreadyHasShopMessage storeName={stores[0].name} />;
+    return <AlreadyHasShopMessage storeName={stores[0].name} storeSlug={stores[0].slug} />;
   }
 
   return (
@@ -44,7 +44,7 @@ function SignedInBanner() {
   );
 }
 
-function AlreadyHasShopMessage({ storeName }: { storeName: string }) {
+function AlreadyHasShopMessage({ storeName, storeSlug }: { storeName: string; storeSlug: string }) {
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <div className="w-full max-w-md text-center">
@@ -63,7 +63,7 @@ function AlreadyHasShopMessage({ storeName }: { storeName: string }) {
             Go to dashboard →
           </Link>
           <Link
-            href={`/s/${storeName.toLowerCase().replace(/\s+/g, "-")}`}
+            href={`/s/${storeSlug}`}
             className="inline-flex h-11 items-center justify-center rounded-full border border-ink/15 px-6 text-[13px] font-semibold tracking-[-0.01em] text-ink transition-colors hover:bg-ink/[0.03]"
           >
             View my shop

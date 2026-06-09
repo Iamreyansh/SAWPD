@@ -210,20 +210,26 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
   }
 
   function back() {
+    let changed = false;
     if (signedIn) {
       if (step > 0) {
         setStep(step - 1);
+        changed = true;
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
     } else {
       // Signed-out: can go back from step 2→1, but NOT from 1→0 after account creation
       if (step === 2 || (step === 1 && !accountCreated)) {
         setStep(step - 1);
+        changed = true;
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
     }
-    setFieldErrors({});
-    setError(null);
+    // Only clear errors if we actually moved to a different step
+    if (changed) {
+      setFieldErrors({});
+      setError(null);
+    }
   }
 
   function submit() {
