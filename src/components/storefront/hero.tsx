@@ -73,7 +73,7 @@ export function Hero({ kicker, headline, sub, imageUrl, imageAlt }: HeroProps) {
 
             <h1 className="display-l text-ink">
               {headline.map((line, i) => (
-                <span key={i} className="block overflow-hidden pb-1">
+                <span key={i} className="block overflow-hidden pb-2">
                   <motion.span
                     initial={{ y: "110%" }}
                     animate={{ y: "0%" }}

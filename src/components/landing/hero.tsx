@@ -23,7 +23,7 @@ export function Hero() {
 
             <h1 className="display-xl text-ink max-w-3xl text-balance">
               {["Your Instagram.", "Now a checkout."].map((line, i) => (
-                <span key={i} className="block overflow-hidden pb-1">
+                <span key={i} className="block overflow-hidden pb-2">
                   <motion.span
                     initial={{ y: "110%" }}
                     animate={{ y: "0%" }}
