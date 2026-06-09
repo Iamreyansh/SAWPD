@@ -147,6 +147,9 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
       // Account step
       if (!/^\S+@\S+\.\S+$/.test(form.accountEmail)) e.accountEmail = "Enter a valid email";
       if (form.accountPassword.length < 8) e.accountPassword = "At least 8 characters";
+      else if (!/[A-Z]/.test(form.accountPassword)) e.accountPassword = "Include an uppercase letter";
+      else if ((form.accountPassword.match(/[0-9]/g) || []).length < 2) e.accountPassword = "Include at least 2 digits";
+      else if (!/[^A-Za-z0-9]/.test(form.accountPassword)) e.accountPassword = "Include a symbol";
     } else {
       // "You" step (signed-in step 0, or signed-out step 1)
       const isYouStep = signedIn ? idx === 0 : idx === 1;
@@ -605,7 +608,7 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
             {pending ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
-                Submitting…
+                {isAccountStep ? "Creating account…" : "Submitting…"}
               </>
             ) : step === steps.length - 1 ? (
               <>
