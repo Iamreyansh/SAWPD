@@ -27,7 +27,7 @@ import { appendAudit } from "@/lib/audit";
 const productSchema = z.object({
   title: z.string().min(1, "Title is required"),
   tagline: z.string().min(1, "Tagline is required"),
-  price: z.coerce.number().int().min(0, "Price must be 0 or more"),
+  price: z.coerce.number().int().min(1, "Price must be at least ₹1"),
   altText: z.string().min(1, "Alt text is required"),
   images: z
     .array(z.object({ id: z.string(), url: z.string().url("Enter a valid image URL") }))
@@ -347,10 +347,10 @@ export async function choosePlanAction(
 }
 
 const storeSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1, "Name is required").max(60, "Name must be 60 characters or less"),
   ownerHandle: z.string().min(1),
   whatsapp: z.string().optional(),
-  upiId: z.string().min(1),
+  upiId: z.string().min(1, "UPI ID is required").regex(/^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$/, "Enter a valid UPI ID (e.g. name@bank)"),
   upiQrImage: z.string().optional().default(""),
   notifyEmail: z.string().email().or(z.literal("")),
   heroKicker: z.string().min(1),

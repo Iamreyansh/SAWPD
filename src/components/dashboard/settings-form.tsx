@@ -13,10 +13,10 @@ import { updateStoreAction, uploadHeroImageAction } from "@/app/dashboard/action
 import type { SellerStore } from "@/types/seller";
 
 const formSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(1, "Name is required").max(60, "Name must be 60 characters or less"),
   ownerHandle: z.string().min(1, "Handle is required"),
   whatsapp: z.string().optional().default(""),
-  upiId: z.string().min(3, "UPI ID is required"),
+  upiId: z.string().min(3, "UPI ID is required").regex(/^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$/, "Enter a valid UPI ID (e.g. name@bank)"),
   upiQrImage: z.string().optional().default(""),
   notifyEmail: z.string().email("Enter a valid email").or(z.literal("")),
   heroKicker: z.string().min(1, "Required"),
