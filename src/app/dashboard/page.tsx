@@ -10,6 +10,7 @@ import { OrderStatusBadge } from "@/components/dashboard/order-status-badge";
 import { Sparkline, buildDailyRevenue } from "@/components/dashboard/sparkline";
 import { CheckInventoryButton } from "@/components/dashboard/check-inventory-button";
 import { OnboardingBanner, type OnboardingStep } from "@/components/dashboard/onboarding-banner";
+import { WelcomeNotification } from "@/components/dashboard/welcome-notification";
 import type { Order, SellerStore } from "@/types/seller";
 
 const LOW_STOCK_THRESHOLD = 5;
@@ -36,8 +37,7 @@ export default async function DashboardOverviewPage() {
       <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-ink/15 p-12 text-center">
         <h1 className="display-m text-ink">No shop selected.</h1>
         <p className="mt-3 text-[14px] text-ink/65">
-          Hi <span className="font-semibold text-ink">{seller.email}</span> — apply
-          for your first shop to start selling on SAWPD.
+          Apply for your first shop to start selling on SAWPD.
         </p>
         <Link
           href="/apply"
@@ -149,6 +149,8 @@ export default async function DashboardOverviewPage() {
       {showOnboarding && (
         <OnboardingBanner initialSteps={onboardingSteps} />
       )}
+
+      <WelcomeNotification storeName={store.name} />
 
       {(trial.reason === "trial" || trial.reason === "trial_ended" || trial.reason === "no_plan") && (
         <section

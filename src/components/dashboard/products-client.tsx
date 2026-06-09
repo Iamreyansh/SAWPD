@@ -13,7 +13,6 @@ import {
   Package,
   Upload,
   X,
-  Link2,
   GripVertical,
   Image as ImageIcon,
   FileText,
@@ -376,7 +375,8 @@ function ProductFormSheet({
   }, [open, product?.id]);
 
   const onOpenChange = (next: boolean) => {
-    if (!next) onClose();
+    // Don't close on outside click or escape — only on explicit close button
+    if (!next) return;
   };
 
   const onSubmit = (data: FormValues) => {
@@ -420,10 +420,20 @@ function ProductFormSheet({
       <SheetContent
         side="right"
         className="bg-bone sm:max-w-md"
-        showClose
+        showClose={false}
       >
         <SheetHeader>
-          <SheetTitle>{product ? "Edit product" : "Add product"}</SheetTitle>
+          <div className="flex items-center justify-between">
+            <SheetTitle>{product ? "Edit product" : "Add product"}</SheetTitle>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full p-2 text-ink/60 transition-colors hover:bg-ink/5 hover:text-ink"
+            >
+              <X className="h-5 w-5" strokeWidth={2} />
+              <span className="sr-only">Close</span>
+            </button>
+          </div>
         </SheetHeader>
         <SheetBody>
           <form
@@ -623,8 +633,6 @@ function MultiImageUploader({
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<PendingImage[]>([]);
-  const [useUrlMode, setUseUrlMode] = useState(false);
-  const [urlDraft, setUrlDraft] = useState("");
   const [dragActive, setDragActive] = useState(false);
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
@@ -784,24 +792,6 @@ function MultiImageUploader({
     setDropTargetIdx(null);
   };
 
-  const addUrl = () => {
-    const url = urlDraft.trim();
-    if (!url) return;
-    try {
-      new URL(url);
-    } catch {
-      onError("That doesn't look like a valid URL.");
-      return;
-    }
-    onChange([
-      ...value,
-      { id: `img_${crypto.randomUUID().slice(0, 8)}`, url },
-    ]);
-    setUrlDraft("");
-    setUseUrlMode(false);
-    onError(null);
-  };
-
   return (
     <div className="space-y-2">
       <input
@@ -933,55 +923,6 @@ function MultiImageUploader({
           Drag, drop, or paste · JPEG/PNG/WebP/GIF · max 5MB each
         </span>
       </div>
-
-      {!useUrlMode ? (
-        <button
-          type="button"
-          onClick={() => {
-            setUseUrlMode(true);
-            setUrlDraft("");
-          }}
-          className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-ink/55 underline-offset-2 hover:text-ink hover:underline"
-        >
-          <Link2 className="h-3 w-3" strokeWidth={2} />
-          Use a URL instead
-        </button>
-      ) : (
-        <div className="flex items-center gap-2">
-          <Input
-            value={urlDraft}
-            onChange={(e) => setUrlDraft(e.target.value)}
-            placeholder="https://images.unsplash.com/..."
-            className="flex-1"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addUrl();
-              }
-            }}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={addUrl}
-            disabled={!canAddMore}
-          >
-            Add
-          </Button>
-          <button
-            type="button"
-            onClick={() => {
-              setUseUrlMode(false);
-              setUrlDraft("");
-            }}
-            className="text-[12px] text-ink/55 hover:text-ink"
-            aria-label="Cancel URL input"
-          >
-            <X className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-        </div>
-      )}
     </div>
   );
 }

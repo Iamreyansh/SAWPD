@@ -345,6 +345,7 @@ const storeSchema = z.object({
   ownerHandle: z.string().min(1),
   whatsapp: z.string().optional(),
   upiId: z.string().min(1),
+  upiQrImage: z.string().optional().default(""),
   notifyEmail: z.string().email().or(z.literal("")),
   heroKicker: z.string().min(1),
   heroSub: z.string().min(1),

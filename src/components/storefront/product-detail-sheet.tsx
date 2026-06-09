@@ -157,17 +157,6 @@ export function ProductDetailSheet({ products }: Props) {
                 </p>
               </div>
 
-              <div className="mt-6 grid grid-cols-2 gap-4 text-[12.5px]">
-                <div>
-                  <p className="eyebrow-ink">Material</p>
-                  <p className="mt-1 text-ink">Premium blend</p>
-                </div>
-                <div>
-                  <p className="eyebrow-ink">Shipping</p>
-                  <p className="mt-1 text-ink">3–5 business days</p>
-                </div>
-              </div>
-
               {product.stockCount > 0 && product.stockCount <= 3 && (
                 <p className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-vermillion/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-vermillion">
                   <span className="h-1.5 w-1.5 rounded-full bg-vermillion" />

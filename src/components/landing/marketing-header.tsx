@@ -57,7 +57,6 @@ export function MarketingHeader({ seller }: { seller?: HeaderSeller | null }) {
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink text-bone text-[11px] font-bold">
                   {seller.email.slice(0, 1).toUpperCase()}
                 </span>
-                <span className="hidden sm:inline">{seller.email}</span>
               </button>
               {menuOpen && (
                 <>
@@ -65,7 +64,12 @@ export function MarketingHeader({ seller }: { seller?: HeaderSeller | null }) {
                   <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-ink/10 bg-bone py-1.5 shadow-float">
                     <div className="border-b border-ink/[0.06] px-4 py-2.5">
                       <p className="text-[11px] uppercase tracking-[0.15em] text-ink/45">Signed in as</p>
-                      <p className="mt-0.5 truncate text-[13px] font-medium text-ink">{seller.email}</p>
+                      <p className="mt-0.5 flex items-center gap-2 text-[13px] font-medium text-ink">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-ink text-bone text-[10px] font-bold">
+                          {seller.email.slice(0, 1).toUpperCase()}
+                        </span>
+                        Account
+                      </p>
                     </div>
                     <Link
                       href="/dashboard"
@@ -92,7 +96,7 @@ export function MarketingHeader({ seller }: { seller?: HeaderSeller | null }) {
             <>
               <Link
                 href="/seller/login"
-                className="hidden h-10 items-center justify-center rounded-full px-4 text-[13.5px] font-semibold text-ink/65 transition-colors hover:text-ink sm:inline-flex"
+                className="inline-flex h-10 items-center justify-center rounded-full px-4 text-[13.5px] font-semibold text-ink/65 transition-colors hover:text-ink"
               >
                 Log in
               </Link>

@@ -24,8 +24,7 @@ export default async function DashboardLayout({
           <p className="eyebrow mb-3">Seller dashboard</p>
           <h1 className="display-m text-ink">No shops yet.</h1>
           <p className="mt-3 text-[14px] text-ink/65">
-            Hi <span className="font-semibold text-ink">{seller.email}</span> —
-            apply for your first shop to start selling on SAWPD. You can apply for
+            Apply for your first shop to start selling on SAWPD. You can apply for
             more shops later from the same account.
           </p>
           <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">

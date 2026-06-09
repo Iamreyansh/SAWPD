@@ -45,6 +45,7 @@ export type Store = {
   heroHeadline: string[];
   heroSub: string;
   upiId: string;
+  upiQrImage?: string;
   notifyEmail: string;
   paused?: boolean;
   pausedReason?: string;

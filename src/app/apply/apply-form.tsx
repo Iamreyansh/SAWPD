@@ -33,6 +33,7 @@ type FormState = {
 };
 
 const DRAFT_KEY = "sawpd.applyDraft.v3";
+const SUBMITTED_KEY = "sawpd.applySubmitted";
 
 const initialState: FormState = {
   accountEmail: "",
@@ -80,6 +81,16 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
 
   useEffect(() => {
     setForm(loadDraft());
+    try {
+      const raw = window.localStorage.getItem(SUBMITTED_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { id: string; email: string };
+        setSubmittedId(parsed.id);
+        setSubmittedEmail(parsed.email);
+      }
+    } catch {
+      // ignore
+    }
     setHydrated(true);
   }, []);
 
@@ -178,6 +189,10 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
         setSubmittedEmail(String(payload.email));
         try {
           window.localStorage.removeItem(DRAFT_KEY);
+          window.localStorage.setItem(
+            SUBMITTED_KEY,
+            JSON.stringify({ id: result.id, email: String(payload.email) })
+          );
         } catch {
           // ignore
         }
@@ -200,6 +215,11 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
           setSubmittedId(null);
           setSubmittedEmail(null);
           setStep(0);
+          try {
+            window.localStorage.removeItem(SUBMITTED_KEY);
+          } catch {
+            // ignore
+          }
         }}
       />
     );

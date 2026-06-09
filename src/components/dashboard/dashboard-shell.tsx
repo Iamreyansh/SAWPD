@@ -15,6 +15,8 @@ import {
   Undo2,
   Store as StoreIcon,
   ChevronDown,
+  Menu,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sellerLogoutAction, setActiveStoreAction } from "@/app/seller/actions";
@@ -49,6 +51,7 @@ export function DashboardShell({
   stores: DashboardStoreOption[];
 }) {
   const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   return (
     <div className="min-h-screen bg-bone">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-ink/[0.07] bg-bone md:flex md:flex-col">
@@ -116,9 +119,12 @@ export function DashboardShell({
             Apply for another shop
           </Link>
           <div className="mt-2 border-t border-ink/[0.05] pt-2">
-            <p className="truncate px-3 text-[11px] font-medium text-ink/45">
-              {sellerEmail}
-            </p>
+            <div className="flex items-center gap-2 px-3 py-1">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-ink text-bone text-[10px] font-bold">
+                {sellerEmail.slice(0, 1).toUpperCase()}
+              </span>
+              <span className="text-[11px] font-medium text-ink/45">Account</span>
+            </div>
             <form action={sellerLogoutAction}>
               <button
                 type="submit"
@@ -133,7 +139,7 @@ export function DashboardShell({
       </aside>
 
       <div className="md:pl-60">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-ink/10 bg-bone/85 px-6 backdrop-blur-md md:hidden">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-ink/10 bg-bone/85 px-4 backdrop-blur-md md:hidden">
           <Link href="/dashboard" className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-vermillion text-bone font-bold text-sm">
               {activeStoreName.slice(0, 1).toUpperCase()}
@@ -142,37 +148,67 @@ export function DashboardShell({
               {activeStoreName}
             </span>
           </Link>
-          <form action={sellerLogoutAction}>
-            <button
-              type="submit"
-              className="text-[12.5px] font-medium text-ink/55 hover:text-ink"
-            >
-              Log out
-            </button>
-          </form>
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-ink/60 transition-colors hover:bg-ink/5 hover:text-ink"
+          >
+            {mobileMenuOpen ? (
+              <X className="h-5 w-5" strokeWidth={2} />
+            ) : (
+              <Menu className="h-5 w-5" strokeWidth={2} />
+            )}
+          </button>
         </header>
-        <nav className="flex gap-1 overflow-x-auto border-b border-ink/10 px-4 py-2 md:hidden">
-          {navItems.map((item) => {
-            const active = item.exact
-              ? pathname === item.href
-              : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "whitespace-nowrap rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors",
-                  active
-                    ? "bg-ink text-bone"
-                    : "text-ink/60 hover:text-ink"
-                )}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <main className="px-6 py-8 md:px-10 md:py-10">{children}</main>
+
+        {mobileMenuOpen && (
+          <div className="border-b border-ink/10 bg-bone px-4 py-3 md:hidden">
+            <nav className="space-y-1">
+              {navItems.map((item) => {
+                const active = item.exact
+                  ? pathname === item.href
+                  : pathname.startsWith(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-medium transition-colors",
+                      active
+                        ? "bg-vermillion/[0.08] text-vermillion-deep"
+                        : "text-ink/65 hover:bg-ink/[0.04] hover:text-ink"
+                    )}
+                  >
+                    <Icon className="h-4.5 w-4.5" strokeWidth={active ? 2.25 : 1.75} />
+                    {item.label}
+                  </Link>
+                );
+              })}
+              <div className="border-t border-ink/10 pt-2 mt-2">
+                <Link
+                  href={`/s/${activeStoreSlug}`}
+                  className="flex items-center justify-between rounded-lg px-3 py-2.5 text-[14px] font-medium text-ink/65 hover:bg-ink/[0.04] hover:text-ink"
+                >
+                  View shop
+                  <ArrowUpRight className="h-4 w-4" strokeWidth={2} />
+                </Link>
+                <form action={sellerLogoutAction}>
+                  <button
+                    type="submit"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-medium text-ink/65 hover:bg-ink/[0.04] hover:text-ink"
+                  >
+                    <LogOut className="h-4.5 w-4.5" strokeWidth={1.75} />
+                    Log out
+                  </button>
+                </form>
+              </div>
+            </nav>
+          </div>
+        )}
+
+        <main className="px-4 py-6 md:px-10 md:py-10">{children}</main>
       </div>
     </div>
   );

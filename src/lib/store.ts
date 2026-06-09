@@ -23,6 +23,7 @@ function rowToStore(row: Record<string, unknown>): SellerStore {
     heroHeadline,
     heroSub: row.hero_sub as string,
     upiId: row.upi_id as string,
+    upiQrImage: (row.upi_qr_image as string) || undefined,
     notifyEmail: row.notify_email as string,
     paused: row.paused as boolean,
     pausedReason: (row.paused_reason as string) || undefined,
@@ -50,6 +51,7 @@ function storeToRow(store: SellerStore): Record<string, unknown> {
     hero_headline: store.heroHeadline,
     hero_sub: store.heroSub,
     upi_id: store.upiId,
+    upi_qr_image: store.upiQrImage || null,
     notify_email: store.notifyEmail,
     paused: store.paused ?? false,
     paused_reason: store.pausedReason || null,
@@ -151,6 +153,7 @@ export async function updateStore(
   if (patch.heroHeadline !== undefined) rowPatch.hero_headline = patch.heroHeadline;
   if (patch.heroSub !== undefined) rowPatch.hero_sub = patch.heroSub;
   if (patch.upiId !== undefined) rowPatch.upi_id = patch.upiId;
+  if (patch.upiQrImage !== undefined) rowPatch.upi_qr_image = patch.upiQrImage || null;
   if (patch.notifyEmail !== undefined) rowPatch.notify_email = patch.notifyEmail;
   if (patch.paused !== undefined) rowPatch.paused = patch.paused;
   if (patch.pausedReason !== undefined) rowPatch.paused_reason = patch.pausedReason || null;

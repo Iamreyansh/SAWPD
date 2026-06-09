@@ -52,9 +52,9 @@ export default async function StorefrontPage({
 
   if (!isOpen) {
     return (
-      <>
+      <div className="flex min-h-screen flex-col">
         <StorefrontHeader store={store} />
-        <main className="flex min-h-[60vh] flex-col items-center justify-center px-5 py-20 text-center">
+        <main className="flex flex-1 flex-col items-center justify-center px-5 py-20 text-center">
           <div className="mx-auto max-w-md">
             <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-vermillion/10">
               <svg className="h-7 w-7 text-vermillion" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -78,13 +78,13 @@ export default async function StorefrontPage({
           </div>
         </main>
         <StorefrontFooter store={store} orders={orders} />
-      </>
+      </div>
     );
   }
   return (
-    <>
+    <div className="flex min-h-screen flex-col">
       <StorefrontHeader store={store} />
-      <main>
+      <main className="flex-1">
         <Hero
           kicker={store.heroKicker}
           headline={store.heroHeadline}
@@ -103,6 +103,6 @@ export default async function StorefrontPage({
       <StorefrontFooter store={store} orders={orders} />
       <CartSheet products={products} storeSlug={store.slug} />
       <ProductDetailSheet products={products} />
-    </>
+    </div>
   );
 }

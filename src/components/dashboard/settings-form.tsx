@@ -17,6 +17,7 @@ const formSchema = z.object({
   ownerHandle: z.string().min(1, "Handle is required"),
   whatsapp: z.string().optional().default(""),
   upiId: z.string().min(3, "UPI ID is required"),
+  upiQrImage: z.string().optional().default(""),
   notifyEmail: z.string().email("Enter a valid email").or(z.literal("")),
   heroKicker: z.string().min(1, "Required"),
   heroSub: z.string().min(1, "Required"),
@@ -33,7 +34,9 @@ export function SettingsForm({ store }: { store: SellerStore }) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingQr, setUploadingQr] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const qrInputRef = useRef<HTMLInputElement>(null);
 
   const {
     register,
@@ -47,6 +50,7 @@ export function SettingsForm({ store }: { store: SellerStore }) {
       ownerHandle: store.ownerHandle,
       whatsapp: store.whatsapp ?? "",
       upiId: store.upiId,
+      upiQrImage: store.upiQrImage ?? "",
       notifyEmail: store.notifyEmail ?? "",
       heroKicker: store.heroKicker,
       heroSub: store.heroSub,
@@ -72,6 +76,23 @@ export function SettingsForm({ store }: { store: SellerStore }) {
       setError(result.error);
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function onQrFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingQr(true);
+    setError(null);
+    const formData = new FormData();
+    formData.append("file", file);
+    const result = await uploadHeroImageAction(formData);
+    setUploadingQr(false);
+    if (result.ok) {
+      setValue("upiQrImage", result.url, { shouldValidate: true });
+    } else {
+      setError(result.error);
+    }
+    if (qrInputRef.current) qrInputRef.current.value = "";
   }
 
   const onSubmit = (data: FormValues) => {
@@ -134,6 +155,49 @@ export function SettingsForm({ store }: { store: SellerStore }) {
             <Input {...register("notifyEmail")} type="email" />
           </Field>
         </div>
+        <div className="mt-4">
+          <Field label="UPI QR code" hint="Upload a screenshot of your QR code so customers can scan and pay.">
+            <div>
+              <input
+                ref={qrInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={onQrFileChange}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => qrInputRef.current?.click()}
+                disabled={uploadingQr || pending}
+              >
+                {uploadingQr ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" strokeWidth={2} />
+                )}
+                {uploadingQr ? "Uploading…" : "Upload QR code"}
+              </Button>
+            </div>
+          </Field>
+          {watch("upiQrImage") && (
+            <div className="mt-3 flex items-center gap-3">
+              <div className="relative h-24 w-24 overflow-hidden rounded-lg border border-ink/10 bg-ink/[0.04]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={watch("upiQrImage")}
+                  alt="UPI QR code"
+                  className="absolute inset-0 h-full w-full object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.opacity = "0";
+                  }}
+                />
+              </div>
+              <p className="text-[11.5px] text-ink/45">Preview · saved on submit</p>
+            </div>
+          )}
+        </div>
       </Section>
 
       <Section
@@ -159,7 +223,8 @@ export function SettingsForm({ store }: { store: SellerStore }) {
             error={fieldErrors.heroImage}
             hint="Upload a 4:5 or 5:4 portrait photo (1200×1600 or larger)."
           >
-            <div className="flex items-center gap-3">
+            <div>
+              <input type="hidden" {...register("heroImage")} />
               <input
                 ref={fileInputRef}
                 type="file"
@@ -181,7 +246,6 @@ export function SettingsForm({ store }: { store: SellerStore }) {
                 )}
                 {uploading ? "Uploading…" : "Upload image"}
               </Button>
-              <Input {...register("heroImage")} className="flex-1 font-mono text-[12px]" />
             </div>
           </Field>
           <HeroImagePreview
