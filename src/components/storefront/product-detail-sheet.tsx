@@ -25,11 +25,17 @@ export function ProductDetailSheet({ products }: Props) {
   const productId = useUiStore((s) => s.productDetailId);
   const close = useUiStore((s) => s.closeProduct);
   const add = useCartStore((s) => s.add);
+  const items = useCartStore((s) => s.items);
   const { toast } = useToast();
 
   const product = products.find((p) => p.id === productId) ?? null;
   const [qty, setQty] = useState(1);
   const [activeIdx, setActiveIdx] = useState(0);
+
+  const currentCartQty = product
+    ? items.find((i) => i.productId === product.id)?.qty ?? 0
+    : 0;
+  const maxAddable = product ? Math.max(0, product.stockCount - currentCartQty) : 0;
 
   useEffect(() => {
     setQty(1);
@@ -163,6 +169,17 @@ export function ProductDetailSheet({ products }: Props) {
                   Only {product.stockCount} left
                 </p>
               )}
+              {currentCartQty > 0 && maxAddable > 0 && (
+                <p className="mt-2 text-[12px] text-ink/50">
+                  You already have {currentCartQty} in your bag. {maxAddable} more available.
+                </p>
+              )}
+              {maxAddable === 0 && currentCartQty > 0 && (
+                <p className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-vermillion/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-vermillion">
+                  <span className="h-1.5 w-1.5 rounded-full bg-vermillion" />
+                  Max stock reached — {currentCartQty} already in bag
+                </p>
+              )}
             </SheetBody>
 
             <div className="border-t border-ink/5 bg-bone px-6 pb-6 pt-4">
@@ -181,9 +198,9 @@ export function ProductDetailSheet({ products }: Props) {
                     {qty}
                   </span>
                   <button
-                    onClick={() => setQty((q) => Math.min(product.stockCount, q + 1))}
+                    onClick={() => setQty((q) => Math.min(maxAddable, q + 1))}
                     className="flex h-9 w-9 items-center justify-center rounded-full text-ink transition-colors hover:bg-ink/5 active:scale-90 disabled:opacity-30"
-                    disabled={qty >= product.stockCount}
+                    disabled={qty >= maxAddable || maxAddable === 0}
                     aria-label="Increase quantity"
                   >
                     <Plus className="h-4 w-4" strokeWidth={2} />
@@ -193,6 +210,7 @@ export function ProductDetailSheet({ products }: Props) {
               <Button
                 size="lg"
                 className="w-full"
+                disabled={maxAddable === 0}
                 onClick={() => {
                   add(product.id, qty);
                   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
@@ -207,7 +225,7 @@ export function ProductDetailSheet({ products }: Props) {
                   setQty(1);
                 }}
               >
-                Add to bag · {formatINR(product.price * qty)}
+                {maxAddable === 0 ? "Max stock reached" : `Add to bag · ${formatINR(product.price * qty)}`}
               </Button>
             </div>
           </>
