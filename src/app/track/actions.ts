@@ -78,14 +78,14 @@ export async function trackOrderAction(input: unknown): Promise<TrackResult> {
 
   const order = await getOrder(orderId);
   if (!order) {
-    return { ok: false, error: "We couldn't find that order." };
+    return { ok: false, error: "No matching order found. Please check your order ID and phone number." };
   }
   const orderPhoneDigits = normalizePhone(order.customer.phone);
   if (
     !orderPhoneDigits.endsWith(phoneDigits) &&
     !phoneDigits.endsWith(orderPhoneDigits)
   ) {
-    return { ok: false, error: "Phone number doesn't match this order." };
+    return { ok: false, error: "No matching order found. Please check your order ID and phone number." };
   }
 
   const store = await getStore(order.storeSlug);

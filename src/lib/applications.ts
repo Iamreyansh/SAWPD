@@ -117,7 +117,8 @@ export async function decideApplication(
       : null;
 
   const sb = createAdminClient();
-  const { error } = await sb
+  // Conditional update: only proceed if application is still pending (prevents race condition)
+  const { data, error } = await sb
     .from("applications")
     .update({
       status: decision,
@@ -125,8 +126,14 @@ export async function decideApplication(
       reviewer_note: reviewerNote,
       trial_ends_at: trialEndsAt,
     })
-    .eq("id", id);
-  if (error) throw error;
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("id")
+    .single();
+  if (error || !data) {
+    // Application was already decided by another admin
+    return null;
+  }
 
   return getApplication(id);
 }

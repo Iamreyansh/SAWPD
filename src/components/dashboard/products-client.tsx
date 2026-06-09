@@ -681,10 +681,15 @@ function MultiImageUploader({
   };
 
   const handleFiles = async (files: File[]) => {
+    const MAX_BYTES = 5 * 1024 * 1024; // 5MB
     const accepted: File[] = [];
     for (const f of files) {
       if (!ACCEPTED_TYPES.includes(f.type)) {
         onError(`"${f.name}" is not a supported image type.`);
+        return;
+      }
+      if (f.size > MAX_BYTES) {
+        onError(`"${f.name}" exceeds 5MB limit.`);
         return;
       }
       accepted.push(f);

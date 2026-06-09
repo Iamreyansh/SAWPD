@@ -15,7 +15,7 @@ import { listProductsForStore } from "@/lib/products";
 
 const customerSchema = z.object({
   name: z.string().min(2),
-  phone: z.string().min(10),
+  phone: z.string().min(10).regex(/^[0-9+\s-]+$/, "Invalid phone number"),
   email: z.string().email().optional().or(z.literal("")),
   address: z.string().min(10),
 });
@@ -34,7 +34,7 @@ const placeOrderSchema = z.object({
   lines: z.array(lineSchema).min(1),
   subtotal: z.number().int().min(0),
   promoCode: z.string().optional().or(z.literal("")),
-  screenshotDataUrl: z.string().optional().or(z.literal("")),
+  screenshotDataUrl: z.string().max(12000000).optional().or(z.literal("")), // ~8MB base64
   captchaToken: z.string().optional().or(z.literal("")),
 });
 

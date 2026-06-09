@@ -429,6 +429,13 @@ const promoSchema = z
         message: "End must be after start.",
       });
     }
+    if (data.expiresAt && new Date(data.expiresAt) < new Date()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["expiresAt"],
+        message: "Expiry date cannot be in the past.",
+      });
+    }
   });
 
 export type PromoFormInput = z.infer<typeof promoSchema>;
