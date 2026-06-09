@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import QRCode from "qrcode";
@@ -57,6 +57,7 @@ export function CheckoutClient({ store, products }: Props) {
   } | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [promoPending, startPromoTransition] = useTransition();
+  const submittingRef = useRef(false);
 
   const lines = useMemo(
     () =>
@@ -130,6 +131,8 @@ export function CheckoutClient({ store, products }: Props) {
       setError("Your bag is empty.");
       return;
     }
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     startTransition(async () => {
       const result = await placeOrder({
         storeSlug: store.slug,
@@ -161,6 +164,7 @@ export function CheckoutClient({ store, products }: Props) {
         clear();
       } else {
         setError(result.error);
+        submittingRef.current = false;
       }
     });
   };

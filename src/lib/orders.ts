@@ -97,20 +97,20 @@ export async function addOrder(input: CreateOrderInput): Promise<Order> {
   });
   if (error) throw error;
 
-  // Decrement stock for each line item (atomic per product)
+  // Decrement stock for each line item (conditional update prevents race condition)
   for (const line of order.lines) {
-    // Read current stock
     const { data: product } = await sb
       .from("products")
       .select("stock_count")
       .eq("id", line.productId)
       .single();
-    if (product) {
-      const newStock = Math.max(0, (product.stock_count as number) - line.qty);
+    if (product && (product.stock_count as number) >= line.qty) {
+      // Conditional update: only decrement if sufficient stock remains
       await sb
         .from("products")
-        .update({ stock_count: newStock })
-        .eq("id", line.productId);
+        .update({ stock_count: (product.stock_count as number) - line.qty })
+        .eq("id", line.productId)
+        .gte("stock_count", line.qty);
     }
   }
 
