@@ -64,7 +64,7 @@ export function SignupForm() {
           autoComplete="new-password"
           required
           minLength={8}
-          placeholder="At least 8 characters"
+          placeholder="8+ chars, 1 cap, 2 digits, 1 symbol"
         />
         {fieldErrors.password && (
           <span className="mt-1.5 block text-[12px] text-vermillion">

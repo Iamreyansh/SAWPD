@@ -1,6 +1,6 @@
 /**
  * Password strength validation.
- * Enforces minimum security requirements beyond just length.
+ * Enforces: min 8 chars, 1 uppercase, 2 digits, 1 symbol.
  */
 
 export type PasswordStrength = "weak" | "fair" | "strong";
@@ -17,31 +17,19 @@ export function checkPasswordStrength(password: string): {
   if (password.length > 128) {
     errors.push("Under 128 characters");
   }
-  if (!/[a-z]/.test(password)) {
-    errors.push("At least one lowercase letter");
-  }
   if (!/[A-Z]/.test(password)) {
     errors.push("At least one uppercase letter");
   }
-  if (!/[0-9]/.test(password)) {
-    errors.push("At least one number");
+
+  // At least 2 digits
+  const digitCount = (password.match(/[0-9]/g) || []).length;
+  if (digitCount < 2) {
+    errors.push("At least two digits");
   }
 
-  // Common weak passwords
-  const common = [
-    "password", "12345678", "qwerty123", "letmein", "admin",
-    "welcome1", "monkey123", "abc12345", "password1",
-  ];
-  if (common.includes(password.toLowerCase())) {
-    errors.push("Password is too common");
-  }
-
-  // Sequential/repeated characters
-  if (/(.)\1{2,}/.test(password)) {
-    errors.push("Avoid repeated characters (e.g. aaa)");
-  }
-  if (/012|123|234|345|456|567|678|789|890/.test(password)) {
-    errors.push("Avoid sequential numbers (e.g. 123)");
+  // At least 1 symbol (!@#$%^&*()_+-=[]{}|;':\",./<>? etc.)
+  if (!/[^A-Za-z0-9]/.test(password)) {
+    errors.push("At least one symbol");
   }
 
   let strength: PasswordStrength = "strong";

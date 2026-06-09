@@ -40,7 +40,7 @@ export function StorefrontHeader({ store, compactName = false }: { store: Store;
         </Link>
 
         <div className="flex items-center gap-2">
-          <span className="hidden text-xs text-ink/50 sm:inline">{store.ownerHandle}</span>
+          <span className="hidden text-xs text-ink/50 sm:inline truncate max-w-[120px]">{store.ownerHandle}</span>
           <CartTrigger />
         </div>
       </div>

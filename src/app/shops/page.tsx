@@ -21,7 +21,9 @@ export default async function ShopsPage() {
     <div className="min-h-screen bg-bone">
       <header className="border-b border-ink/[0.06] bg-bone/95 backdrop-blur-md">
         <div className="container-editorial flex h-16 items-center justify-between">
-          <Logo invert />
+          <Link href="/" className="flex items-center gap-2">
+            <Logo invert />
+          </Link>
           <Link
             href="/apply"
             className="inline-flex h-10 items-center justify-center rounded-full bg-vermillion px-5 text-[13.5px] font-semibold text-bone transition-all hover:bg-vermillion-deep active:scale-[0.98] shadow-glow"

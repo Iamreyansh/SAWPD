@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { submitApplication, type ApplyResult } from "./actions";
 import {
   sellerSignupAction,
@@ -30,6 +31,14 @@ type FormState = {
   phone: string;
   storeName: string;
   niche: string;
+  followerCount: string;
+  salesCadence: string;
+  salesCount: string;
+  averageOrderValue: string;
+  currentSetup: string;
+  topProducts: string;
+  referralSource: string;
+  motivation: string;
 };
 
 const DRAFT_KEY = "sawpd.applyDraft.v3";
@@ -44,6 +53,14 @@ const initialState: FormState = {
   phone: "",
   storeName: "",
   niche: "",
+  followerCount: "",
+  salesCadence: "",
+  salesCount: "",
+  averageOrderValue: "",
+  currentSetup: "",
+  topProducts: "",
+  referralSource: "",
+  motivation: "",
 };
 
 function loadDraft(): FormState {
@@ -117,9 +134,12 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
       if (realIdx === 0) {
         // "You" step
         if (form.fullName.trim().length < 2) e.fullName = "Required";
-        if (!form.instagramHandle.trim()) e.instagramHandle = "Required";
+        const handle = form.instagramHandle.trim();
+        if (!handle) e.instagramHandle = "Required";
+        else if (!handle.startsWith("@")) e.instagramHandle = "Must start with @";
         if (!/^\S+@\S+\.\S+$/.test(form.email)) e.email = "Enter a valid email";
-        if (form.phone.replace(/\D/g, "").length < 10) e.phone = "Min 10 digits";
+        const phoneDigits = form.phone.replace(/\D/g, "");
+        if (phoneDigits.length < 10) e.phone = "Min 10 digits";
       } else if (realIdx === 1) {
         // "Shop" step
         if (form.storeName.trim().length < 2) e.storeName = "Shop name is required";
@@ -174,13 +194,31 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
 
   function submit() {
     setError(null);
+    // Auto-prepend +91 if phone doesn't start with +
+    let phoneValue = form.phone.trim();
+    if (phoneValue && !phoneValue.startsWith("+")) {
+      phoneValue = "+91" + phoneValue.replace(/\s/g, "");
+    }
+    // Auto-prepend @ for Instagram handle if missing
+    let handleValue = form.instagramHandle.trim();
+    if (handleValue && !handleValue.startsWith("@")) {
+      handleValue = "@" + handleValue;
+    }
     const payload: Record<string, unknown> = {
       fullName: form.fullName.trim(),
-      instagramHandle: form.instagramHandle.trim(),
+      instagramHandle: handleValue,
       email: form.email.trim(),
-      phone: form.phone.trim(),
+      phone: phoneValue,
       storeName: form.storeName.trim(),
       niche: form.niche || undefined,
+      followerCount: form.followerCount ? Number(form.followerCount) : undefined,
+      salesCadence: form.salesCadence || undefined,
+      salesCount: form.salesCount ? Number(form.salesCount) : undefined,
+      averageOrderValue: form.averageOrderValue ? Number(form.averageOrderValue) : undefined,
+      currentSetup: form.currentSetup || undefined,
+      topProducts: form.topProducts || undefined,
+      referralSource: form.referralSource || undefined,
+      motivation: form.motivation || undefined,
     };
     startTransition(async () => {
       const result: ApplyResult = await submitApplication(payload);
@@ -210,17 +248,6 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
       <SuccessView
         referenceId={submittedId}
         email={submittedEmail ?? ""}
-        onStartOver={() => {
-          setForm(initialState);
-          setSubmittedId(null);
-          setSubmittedEmail(null);
-          setStep(0);
-          try {
-            window.localStorage.removeItem(SUBMITTED_KEY);
-          } catch {
-            // ignore
-          }
-        }}
       />
     );
   }
@@ -323,7 +350,7 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
                         type="password"
                         value={form.accountPassword}
                         onChange={(e) => patch("accountPassword", e.target.value)}
-                        placeholder="At least 8 characters"
+                        placeholder="8+ chars, 1 cap, 2 digits, 1 symbol"
                         autoComplete="new-password"
                         minLength={8}
                       />
@@ -352,8 +379,17 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
                     <Input
                       value={form.instagramHandle}
                       onChange={(e) => patch("instagramHandle", e.target.value)}
-                      placeholder="@yourbrand"
+                      onBlur={(e) => {
+                        const val = e.target.value.trim();
+                        if (val && !val.startsWith("@")) {
+                          patch("instagramHandle", "@" + val);
+                        }
+                      }}
+                      placeholder="yourbrand"
                     />
+                    {!form.instagramHandle && (
+                      <span className="mt-1 block text-[11px] text-ink/45">@ added automatically</span>
+                    )}
                   </Field>
                   <Field label="Email" error={fieldErrors.email}>
                     <Input
@@ -369,9 +405,27 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
                       type="tel"
                       value={form.phone}
                       onChange={(e) => patch("phone", e.target.value)}
-                      placeholder="+91 98765 43210"
+                      placeholder="98765 43210"
                       autoComplete="tel"
                     />
+                    {!form.phone && (
+                      <span className="mt-1 block text-[11px] text-ink/45">+91 added automatically</span>
+                    )}
+                  </Field>
+                  <Field label="How did you hear about us?" error={fieldErrors.referralSource}>
+                    <select
+                      value={form.referralSource}
+                      onChange={(e) => patch("referralSource", e.target.value)}
+                      className="flex h-10 w-full rounded-xl border border-ink/15 bg-bone px-3 py-2 text-[14px] text-ink outline-none transition-colors focus:border-ink/40"
+                    >
+                      <option value="">Select (optional)</option>
+                      <option value="instagram">Instagram</option>
+                      <option value="friend">Friend / word of mouth</option>
+                      <option value="google">Google search</option>
+                      <option value="youtube">YouTube</option>
+                      <option value="twitter">Twitter / X</option>
+                      <option value="other">Other</option>
+                    </select>
                   </Field>
                 </div>
               )}
@@ -404,6 +458,72 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
                     </select>
                   </Field>
                 </div>
+
+                <p className="text-[12px] text-ink/45">Optional — helps us personalize your experience.</p>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Instagram followers">
+                    <Input
+                      type="number"
+                      value={form.followerCount}
+                      onChange={(e) => patch("followerCount", e.target.value)}
+                      placeholder="e.g. 5000"
+                      min="0"
+                    />
+                  </Field>
+                  <Field label="How often do you sell?">
+                    <select
+                      value={form.salesCadence}
+                      onChange={(e) => patch("salesCadence", e.target.value)}
+                      className="flex h-10 w-full rounded-xl border border-ink/15 bg-bone px-3 py-2 text-[14px] text-ink outline-none transition-colors focus:border-ink/40"
+                    >
+                      <option value="">Select (optional)</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </Field>
+                  <Field label="Typical orders per cycle">
+                    <Input
+                      type="number"
+                      value={form.salesCount}
+                      onChange={(e) => patch("salesCount", e.target.value)}
+                      placeholder="e.g. 20"
+                      min="0"
+                    />
+                  </Field>
+                  <Field label="Avg order value (₹)">
+                    <Input
+                      type="number"
+                      value={form.averageOrderValue}
+                      onChange={(e) => patch("averageOrderValue", e.target.value)}
+                      placeholder="e.g. 500"
+                      min="0"
+                    />
+                  </Field>
+                </div>
+                <Field label="What do you sell?">
+                  <Input
+                    value={form.topProducts}
+                    onChange={(e) => patch("topProducts", e.target.value)}
+                    placeholder="e.g. Handmade earrings, custom tees"
+                  />
+                </Field>
+                <Field label="Current selling setup">
+                  <Input
+                    value={form.currentSetup}
+                    onChange={(e) => patch("currentSetup", e.target.value)}
+                    placeholder="e.g. Instagram DMs, link in bio, Shopify"
+                  />
+                </Field>
+                <Field label="Why do you want to sell on SAWPD?">
+                  <Textarea
+                    value={form.motivation}
+                    onChange={(e) => patch("motivation", e.target.value)}
+                    placeholder="Tell us briefly (optional)"
+                    rows={3}
+                  />
+                </Field>
               </div>
             )}
           </motion.div>
@@ -468,11 +588,9 @@ export function ApplyForm({ signedIn = false }: { signedIn?: boolean } = {}) {
 function SuccessView({
   referenceId,
   email,
-  onStartOver,
 }: {
   referenceId: string;
   email: string;
-  onStartOver: () => void;
 }) {
   return (
     <AnimatePresence>
@@ -515,14 +633,10 @@ function SuccessView({
           <Button asChild variant="ghost" size="default">
             <Link href="/s/riya">Peek at a live shop</Link>
           </Button>
-          <button
-            type="button"
-            onClick={onStartOver}
-            className="text-[13.5px] font-semibold text-ink/55 transition-colors hover:text-ink"
-          >
-            Apply again
-          </button>
         </div>
+        <p className="mt-6 text-[13.5px] text-ink/50">
+          You&apos;ll receive an email once your application is reviewed. You can apply for additional shops after your current application is decided.
+        </p>
       </motion.div>
     </AnimatePresence>
   );

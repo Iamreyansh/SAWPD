@@ -128,7 +128,16 @@ export function SettingsForm({ store }: { store: SellerStore }) {
             <Input {...register("name")} />
           </Field>
           <Field label="Instagram handle" error={fieldErrors.ownerHandle}>
-            <Input {...register("ownerHandle")} placeholder="@yourhandle" />
+            <Input
+              {...register("ownerHandle")}
+              placeholder="yourhandle"
+              onBlur={(e) => {
+                const val = e.target.value.trim();
+                if (val && !val.startsWith("@")) {
+                  setValue("ownerHandle", "@" + val);
+                }
+              }}
+            />
           </Field>
         </div>
         <div className="mt-4">
