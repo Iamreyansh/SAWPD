@@ -86,7 +86,7 @@ export async function listLiveProductsForStore(slug: string): Promise<Product[]>
     .from("products")
     .select("*")
     .eq("store_slug", slug)
-    .or(`status.eq.live,and(status.eq.scheduled,scheduled_for.lte.${now}),and(status.is.null)`);
+    .or(`status.eq.live,and(status.eq.scheduled,scheduled_for.lte.${now})`);
   if (error || !data) return [];
   return data.map(rowToProduct).filter((p): p is Product => p !== null);
 }

@@ -8,6 +8,7 @@ import {
   getProduct,
   updateProduct,
 } from "@/lib/products";
+import { LOW_STOCK_THRESHOLD } from "@/lib/utils";
 import { getOrder, listOrders, updateOrderStatus } from "@/lib/orders";
 import { activatePlanMock, getStoreForSeller, updateStore } from "@/lib/store";
 import { requireActiveStore, requireSeller } from "@/lib/seller-auth";
@@ -543,8 +544,6 @@ export async function deletePromoAction(
   revalidatePath("/dashboard/promotions");
   return { ok: true };
 }
-
-const LOW_STOCK_THRESHOLD = 5;
 
 export type CheckInventoryResult = {
   ok: true;

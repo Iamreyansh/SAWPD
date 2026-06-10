@@ -5,7 +5,7 @@ import { requireActiveStore } from "@/lib/seller-auth";
 import { listOrders } from "@/lib/orders";
 import { OrderStatusBadge } from "@/components/dashboard/order-status-badge";
 import { Pagination } from "@/components/ui/pagination";
-import { formatINR } from "@/lib/utils";
+import { formatINR, timeAgo } from "@/lib/utils";
 import type { OrderStatus } from "@/types/seller";
 
 export const metadata = { title: "Dashboard · Orders" };
@@ -21,17 +21,6 @@ const TABS: { id: OrderStatus | "all"; label: string }[] = [
 ];
 
 const PAGE_SIZE = 10;
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
 
 function parsePage(value: string | undefined): number {
   const n = Number(value);

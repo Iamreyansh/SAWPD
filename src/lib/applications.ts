@@ -52,6 +52,19 @@ export async function getApplication(id: string): Promise<Application | null> {
   return rowToApp(data);
 }
 
+export async function getApplicationByEmail(email: string): Promise<Application | null> {
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("applications")
+    .select("*")
+    .eq("email", email)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToApp(data);
+}
+
 export async function addApplication(
   input: ApplicationInput,
   options?: { sellerId?: string }

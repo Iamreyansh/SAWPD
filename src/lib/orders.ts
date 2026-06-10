@@ -125,7 +125,7 @@ export async function countOrders(slug: string): Promise<number> {
 }
 
 /**
- * Sum revenue for orders matching given statuses — single aggregate query.
+ * Sum revenue for orders matching given statuses — single RPC call.
  */
 export async function sumRevenueByStatus(
   slug: string,
@@ -133,43 +133,36 @@ export async function sumRevenueByStatus(
 ): Promise<number> {
   if (statuses.length === 0) return 0;
   const sb = createAdminClient();
-  const { data, error } = await sb
-    .from("orders")
-    .select("total")
-    .eq("store_slug", slug)
-    .in("status", statuses);
-  if (error || !data) return 0;
-  return data.reduce((acc, row) => acc + ((row.total as number) ?? 0), 0);
+  const { data, error } = await sb.rpc("sum_orders_total", {
+    p_store_slug: slug,
+    p_statuses: statuses,
+  });
+  if (error) return 0;
+  return (data as number) ?? 0;
 }
 
 /**
- * Sum total discount for a store — single aggregate query.
+ * Sum total discount for a store — single RPC call.
  */
 export async function sumDiscounts(slug: string): Promise<number> {
   const sb = createAdminClient();
-  const { data, error } = await sb
-    .from("orders")
-    .select("discount_amount")
-    .eq("store_slug", slug);
-  if (error || !data) return 0;
-  return data.reduce(
-    (acc, row) => acc + ((row.discount_amount as number) ?? 0),
-    0
-  );
+  const { data, error } = await sb.rpc("sum_discounts", {
+    p_store_slug: slug,
+  });
+  if (error) return 0;
+  return (data as number) ?? 0;
 }
 
 /**
- * Count orders with discount for a store.
+ * Count orders with discount for a store — single RPC call.
  */
 export async function countDiscountedOrders(slug: string): Promise<number> {
   const sb = createAdminClient();
-  const { data, error } = await sb
-    .from("orders")
-    .select("id")
-    .eq("store_slug", slug)
-    .not("discount_amount", "is", null);
-  if (error || !data) return 0;
-  return data.length;
+  const { data, error } = await sb.rpc("count_discounted_orders", {
+    p_store_slug: slug,
+  });
+  if (error) return 0;
+  return (data as number) ?? 0;
 }
 
 /**
@@ -225,7 +218,11 @@ export type CreateOrderInput = Omit<
   status?: OrderStatus;
 };
 
-export async function addOrder(input: CreateOrderInput): Promise<Order> {
+export type CreateOrderResult =
+  | { order: Order; stockFailed: false }
+  | { order: null; stockFailed: true };
+
+export async function addOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
   const order: Order = {
     ...input,
     id: `ord_${randomUUID().slice(0, 8)}`,
@@ -234,6 +231,41 @@ export async function addOrder(input: CreateOrderInput): Promise<Order> {
   };
 
   const sb = createAdminClient();
+
+  // Decrement stock BEFORE inserting order — prevents overselling.
+  // If any line has insufficient stock, abort the entire order.
+  const stockResults = await Promise.all(
+    order.lines.map(async (line) => {
+      const { data, error } = await sb.rpc("decrement_stock", {
+        p_product_id: line.productId,
+        p_qty: line.qty,
+      });
+      return { productId: line.productId, success: !error && data !== -1 };
+    })
+  );
+
+  const failedLines = stockResults.filter((r) => !r.success);
+  if (failedLines.length > 0) {
+    // Roll back: re-increment stock for lines that were decremented
+    await Promise.all(
+      stockResults
+        .filter((r) => r.success)
+        .map(async (r) => {
+          const line = order.lines.find((l) => l.productId === r.productId)!;
+          try {
+            await sb.rpc("increment_stock", {
+              p_product_id: line.productId,
+              p_qty: line.qty,
+            });
+          } catch {
+            console.error(`Stock rollback failed for ${line.productId}`);
+          }
+        })
+    );
+    return { order: null, stockFailed: true };
+  }
+
+  // All stock decrements succeeded — insert the order
   const { error } = await sb.from("orders").insert({
     id: order.id,
     store_slug: order.storeSlug,
@@ -250,23 +282,25 @@ export async function addOrder(input: CreateOrderInput): Promise<Order> {
     tracking_note: order.trackingNote ?? null,
     reviewer_note: order.reviewerNote ?? null,
   });
-  if (error) throw error;
 
-  // Decrement stock for each line item — atomic via RPC, prevents overselling
-  await Promise.all(
-    order.lines.map(async (line) => {
-      const { data, error } = await sb.rpc("decrement_stock", {
-        p_product_id: line.productId,
-        p_qty: line.qty,
-      });
-      if (error || data === -1) {
-        // Stock insufficient or product not found — log but don't block order
-        console.warn(`Stock decrement failed for ${line.productId}: ${error?.message ?? "insufficient stock"}`);
-      }
-    })
-  );
+  if (error) {
+    // Order insert failed — roll back all stock decrements
+    await Promise.all(
+      order.lines.map(async (line) => {
+        try {
+          await sb.rpc("increment_stock", {
+            p_product_id: line.productId,
+            p_qty: line.qty,
+          });
+        } catch {
+          console.error(`Stock rollback failed for ${line.productId}`);
+        }
+      })
+    );
+    throw error;
+  }
 
-  return order;
+  return { order, stockFailed: false };
 }
 
 export type OrderStatusUpdate = {
@@ -274,12 +308,34 @@ export type OrderStatusUpdate = {
   trackingNote?: string;
 };
 
+/** Valid status transitions — prevents invalid state changes */
+const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  awaiting_verification: ["awaiting_payment", "verified", "cancelled"],
+  awaiting_payment: ["verified", "cancelled"],
+  verified: ["shipped", "cancelled"],
+  shipped: ["completed"],
+  completed: [],
+  cancelled: [],
+};
+
 export async function updateOrderStatus(
   id: string,
   patch: OrderStatusUpdate
 ): Promise<Order | null> {
-  const now = new Date().toISOString();
   const sb = createAdminClient();
+
+  // Fetch current status to validate transition
+  const current = await getOrder(id);
+  if (!current) return null;
+
+  const allowed = VALID_TRANSITIONS[current.status];
+  if (!allowed || !allowed.includes(patch.status)) {
+    throw new Error(
+      `Invalid status transition: ${current.status} → ${patch.status}`
+    );
+  }
+
+  const now = new Date().toISOString();
 
   const rowPatch: Record<string, unknown> = {
     status: patch.status,

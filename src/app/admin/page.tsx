@@ -4,22 +4,11 @@ import { isAdmin } from "@/lib/admin-auth";
 import { listApplications } from "@/lib/applications";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { readRecentAudit, describeAuditEvent } from "@/lib/audit";
-import { formatINR } from "@/lib/utils";
+import { formatINR, timeAgo } from "@/lib/utils";
 
 export const metadata = { title: "Admin · Overview" };
 
 export const dynamic = "force-dynamic";
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
 
 function trialDaysLeft(iso: string): number {
   const ms = new Date(iso).getTime() - Date.now();

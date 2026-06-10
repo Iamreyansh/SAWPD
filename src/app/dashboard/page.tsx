@@ -4,7 +4,7 @@ import { listProductsForStore } from "@/lib/products";
 import { listOrderSummaries, countOrdersByStatus, sumRevenueByStatus, sumDiscounts, countDiscountedOrders } from "@/lib/orders";
 import { listPromosForStore } from "@/lib/promos";
 import { getTrialState } from "@/lib/trial";
-import { formatINR } from "@/lib/utils";
+import { formatINR, timeAgo, LOW_STOCK_THRESHOLD } from "@/lib/utils";
 import { OrderStatusBadge } from "@/components/dashboard/order-status-badge";
 import { Sparkline, buildDailyRevenue } from "@/components/dashboard/sparkline";
 import { CheckInventoryButton } from "@/components/dashboard/check-inventory-button";
@@ -12,21 +12,8 @@ import { OnboardingBanner, type OnboardingStep } from "@/components/dashboard/on
 import { WelcomeNotification } from "@/components/dashboard/welcome-notification";
 import type { Order } from "@/types/seller";
 
-const LOW_STOCK_THRESHOLD = 5;
-
 export const metadata = { title: "Dashboard · Overview" };
 export const dynamic = "force-dynamic";
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
 
 export default async function DashboardOverviewPage() {
   const store = await requireActiveStore();
@@ -290,6 +277,21 @@ export default async function DashboardOverviewPage() {
               </li>
             )}
           </ul>
+        </section>
+      ) : products.length === 0 ? (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-ink/15 p-5">
+          <div>
+            <p className="eyebrow-ink">Inventory</p>
+            <p className="mt-1 text-[14.5px] text-ink/60">
+              No products yet. Add your first product to start selling.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/products"
+            className="inline-flex h-9 items-center justify-center rounded-full bg-ink px-4 text-[12.5px] font-semibold text-bone hover:bg-ink/90"
+          >
+            Add product
+          </Link>
         </section>
       ) : (
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-bone p-5">

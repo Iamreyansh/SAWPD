@@ -176,7 +176,7 @@ export async function updateStore(
     .eq("slug", slug)
     .select()
     .single();
-  if (error) throw error;
+  if (error) throw new Error(`Failed to update shop: ${error.message}`);
   return data ? normalizeStore(rowToStore(data)) : null;
 }
 

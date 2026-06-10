@@ -130,7 +130,7 @@ export async function placeOrder(
   let discountAmount = 0;
   let appliedCode: string | undefined;
   if (data.promoCode) {
-    const commit = await applyPromo(data.storeSlug, data.promoCode, data.subtotal);
+    const commit = await applyPromo(data.storeSlug, data.promoCode, serverSubtotal);
     if (!commit.ok) {
       return { ok: false, error: commit.error };
     }
@@ -138,18 +138,30 @@ export async function placeOrder(
     appliedCode = commit.promoCode;
   }
 
-  const finalTotal = Math.max(0, data.subtotal - discountAmount);
+  const finalTotal = Math.max(0, serverSubtotal - discountAmount);
 
   const screenshotDataUrl = data.screenshotDataUrl || undefined;
   const check = screenshotDataUrl
     ? checkPaymentScreenshot(screenshotDataUrl)
     : undefined;
 
-  const order = await addOrder({
+  // Build authoritative lines from DB data — never trust client-sent titles/prices
+  const authoritativeLines: OrderLine[] = data.lines.map((l) => {
+    const dbProduct = productMap.get(l.productId)!;
+    return {
+      productId: l.productId,
+      title: dbProduct.title,
+      price: dbProduct.price,
+      qty: l.qty,
+      imageUrl: dbProduct.images[0]?.url ?? "",
+    };
+  });
+
+  const result = await addOrder({
     storeSlug: data.storeSlug,
     customer: data.customer,
-    lines: data.lines as OrderLine[],
-    subtotal: data.subtotal,
+    lines: authoritativeLines,
+    subtotal: serverSubtotal,
     total: finalTotal,
     discountAmount: discountAmount || undefined,
     promoCode: appliedCode,
@@ -157,17 +169,23 @@ export async function placeOrder(
     paymentScreenshot: check,
     status: "awaiting_verification",
   });
+
+  if (result.stockFailed) {
+    // Stock was insufficient — order was not inserted (rolled back before insert)
+    return { ok: false, error: "Some items went out of stock. Please refresh and try again." };
+  }
+
   await notifyOrderPlaced({
     storeName: store.name,
     storeEmail: store.notifyEmail || undefined,
-    orderId: order.id,
-    customerName: order.customer.name,
-    total: order.total,
+    orderId: result.order.id,
+    customerName: result.order.customer.name,
+    total: result.order.total,
   });
   revalidatePath(`/s/${data.storeSlug}`);
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/orders");
   revalidatePath("/dashboard/customers");
   revalidatePath("/admin");
-  return { ok: true, orderId: order.id };
+  return { ok: true, orderId: result.order.id };
 }
