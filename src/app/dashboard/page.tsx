@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireActiveStore } from "@/lib/seller-auth";
 import { listProductsForStore } from "@/lib/products";
-import { listOrders } from "@/lib/orders";
+import { listOrderSummaries, countOrdersByStatus, sumRevenueByStatus, sumDiscounts, countDiscountedOrders } from "@/lib/orders";
 import { listPromosForStore } from "@/lib/promos";
 import { getTrialState } from "@/lib/trial";
 import { formatINR } from "@/lib/utils";
@@ -47,26 +47,18 @@ export default async function DashboardOverviewPage() {
     );
   }
 
-  const [orders, products, promos] = await Promise.all([
-    listOrders(store.slug),
+  const [orders, products, promos, statusCounts, totalRevenue, totalDiscount, discountedCount] = await Promise.all([
+    listOrderSummaries(store.slug),
     listProductsForStore(store.slug),
     listPromosForStore(store.slug),
+    countOrdersByStatus(store.slug),
+    sumRevenueByStatus(store.slug, ["verified", "shipped", "completed"]),
+    sumDiscounts(store.slug),
+    countDiscountedOrders(store.slug),
   ]);
 
-  const verifiedOrLater = orders.filter(
-    (o) => o.status === "verified" || o.status === "shipped" || o.status === "completed"
-  );
-  const totalRevenue = verifiedOrLater.reduce((acc, o) => acc + o.total, 0);
-  const totalDiscount = orders.reduce(
-    (acc, o) => acc + (o.discountAmount ?? 0),
-    0
-  );
-  const pendingVerification = orders.filter(
-    (o) => o.status === "awaiting_verification"
-  ).length;
-  const awaitingPayment = orders.filter(
-    (o) => o.status === "awaiting_payment"
-  ).length;
+  const pendingVerification = statusCounts.awaiting_verification;
+  const awaitingPayment = statusCounts.awaiting_payment;
   const lowStock = products.filter(
     (p) =>
       p.isAvailable &&
@@ -210,8 +202,8 @@ export default async function DashboardOverviewPage() {
       {totalDiscount > 0 && (
         <p className="text-[12.5px] text-ink/55">
           {formatINR(totalDiscount)} given in promo discounts across{" "}
-          {orders.filter((o) => o.discountAmount).length} order
-          {orders.filter((o) => o.discountAmount).length === 1 ? "" : "s"}.
+          {discountedCount} order
+          {discountedCount === 1 ? "" : "s"}.
         </p>
       )}
 
@@ -239,8 +231,8 @@ export default async function DashboardOverviewPage() {
             </p>
           </div>
           <p className="text-[12px] text-ink/45">
-            {verifiedOrLater.length} paid order
-            {verifiedOrLater.length === 1 ? "" : "s"} total
+            {statusCounts.verified + statusCounts.shipped + statusCounts.completed} paid order
+            {(statusCounts.verified + statusCounts.shipped + statusCounts.completed) === 1 ? "" : "s"} total
           </p>
         </div>
         <Sparkline

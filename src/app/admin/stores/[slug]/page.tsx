@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowUpRight, Inbox } from "lucide-react";
 import { isAdmin } from "@/lib/admin-auth";
 import { getStore } from "@/lib/store";
-import { listOrders } from "@/lib/orders";
+import { listOrderSummaries, sumRevenueByStatus, sumDiscounts, countOrdersByStatus } from "@/lib/orders";
 import { listProductsForStore } from "@/lib/products";
 import { listApplications } from "@/lib/applications";
 import { getTrialState } from "@/lib/trial";
@@ -49,20 +49,18 @@ export default async function AdminStoreDetailPage({
   const store = await getStore(slug);
   if (!store) notFound();
 
-  const [orders, products, applications] = await Promise.all([
-    listOrders(store.slug),
+  const [orders, products, applications, totalRevenue, totalDiscount, statusCounts] = await Promise.all([
+    listOrderSummaries(store.slug),
     listProductsForStore(store.slug),
     listApplications(),
+    sumRevenueByStatus(store.slug, ["verified", "shipped", "completed"]),
+    sumDiscounts(store.slug),
+    countOrdersByStatus(store.slug),
   ]);
   const trial = getTrialState(store);
   const matchedApp = applications.find((a) => a.email === store.notifyEmail);
 
-  const verified = orders.filter(
-    (o) => o.status === "verified" || o.status === "shipped" || o.status === "completed"
-  );
-  const totalRevenue = verified.reduce((acc, o) => acc + o.total, 0);
-  const totalDiscount = orders.reduce((acc, o) => acc + (o.discountAmount ?? 0), 0);
-  const pendingVerification = orders.filter((o) => o.status === "awaiting_verification").length;
+  const pendingVerification = statusCounts.awaiting_verification;
   const lowStock = products.filter(
     (p) => p.isAvailable && p.stockCount > 0 && p.stockCount <= 5
   );
@@ -127,7 +125,7 @@ export default async function AdminStoreDetailPage({
         <Stat
           label="Revenue"
           value={formatINR(totalRevenue)}
-          sub={`${verified.length} paid order${verified.length === 1 ? "" : "s"}`}
+          sub={`${statusCounts.verified + statusCounts.shipped + statusCounts.completed} paid order${(statusCounts.verified + statusCounts.shipped + statusCounts.completed) === 1 ? "" : "s"}`}
         />
         <Stat
           label="Verify queue"

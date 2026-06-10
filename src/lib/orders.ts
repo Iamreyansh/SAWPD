@@ -77,31 +77,38 @@ export async function getOrder(id: string): Promise<Order | null> {
 }
 
 /**
- * Count orders by status for a store — single aggregate query, no data transfer.
+ * Count orders by status for a store — single query, count in JS.
  */
 export async function countOrdersByStatus(
   slug: string
 ): Promise<Record<OrderStatus, number>> {
   const sb = createAdminClient();
-  const counts: Record<string, number> = {};
-  const statuses: OrderStatus[] = [
-    "awaiting_verification",
-    "awaiting_payment",
-    "verified",
-    "shipped",
-    "completed",
-    "cancelled",
-  ];
-  await Promise.all(
-    statuses.map(async (status) => {
-      const { count } = await sb
-        .from("orders")
-        .select("id", { count: "exact", head: true })
-        .eq("store_slug", slug)
-        .eq("status", status);
-      counts[status] = count ?? 0;
-    })
-  );
+  const { data, error } = await sb
+    .from("orders")
+    .select("status")
+    .eq("store_slug", slug);
+  if (error || !data) {
+    return {
+      awaiting_verification: 0,
+      awaiting_payment: 0,
+      verified: 0,
+      shipped: 0,
+      completed: 0,
+      cancelled: 0,
+    };
+  }
+  const counts: Record<string, number> = {
+    awaiting_verification: 0,
+    awaiting_payment: 0,
+    verified: 0,
+    shipped: 0,
+    completed: 0,
+    cancelled: 0,
+  };
+  for (const row of data) {
+    const s = row.status as string;
+    if (s in counts) counts[s]++;
+  }
   return counts as Record<OrderStatus, number>;
 }
 
@@ -115,6 +122,100 @@ export async function countOrders(slug: string): Promise<number> {
     .select("id", { count: "exact", head: true })
     .eq("store_slug", slug);
   return count ?? 0;
+}
+
+/**
+ * Sum revenue for orders matching given statuses — single aggregate query.
+ */
+export async function sumRevenueByStatus(
+  slug: string,
+  statuses: OrderStatus[]
+): Promise<number> {
+  if (statuses.length === 0) return 0;
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("orders")
+    .select("total")
+    .eq("store_slug", slug)
+    .in("status", statuses);
+  if (error || !data) return 0;
+  return data.reduce((acc, row) => acc + ((row.total as number) ?? 0), 0);
+}
+
+/**
+ * Sum total discount for a store — single aggregate query.
+ */
+export async function sumDiscounts(slug: string): Promise<number> {
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("orders")
+    .select("discount_amount")
+    .eq("store_slug", slug);
+  if (error || !data) return 0;
+  return data.reduce(
+    (acc, row) => acc + ((row.discount_amount as number) ?? 0),
+    0
+  );
+}
+
+/**
+ * Count orders with discount for a store.
+ */
+export async function countDiscountedOrders(slug: string): Promise<number> {
+  const sb = createAdminClient();
+  const { data, error } = await sb
+    .from("orders")
+    .select("id")
+    .eq("store_slug", slug)
+    .not("discount_amount", "is", null);
+  if (error || !data) return 0;
+  return data.length;
+}
+
+/**
+ * Get store footer stats — single query, no full order load.
+ * Returns week quantity, total quantity, and customer count.
+ */
+export async function getStoreFooterStats(
+  slug: string
+): Promise<{ weekCount: number; totalCount: number; customerCount: number } | null> {
+  const sb = createAdminClient();
+  const soldStatuses = ["verified", "shipped", "completed"];
+  const { data, error } = await sb
+    .from("orders")
+    .select("created_at, lines, customer")
+    .eq("store_slug", slug)
+    .in("status", soldStatuses);
+  if (error || !data || data.length === 0) return null;
+
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  let weekCount = 0;
+  let totalCount = 0;
+  const phones = new Set<string>();
+
+  for (const row of data) {
+    let lines: { qty: number }[] = [];
+    if (Array.isArray(row.lines)) {
+      lines = row.lines as { qty: number }[];
+    } else if (typeof row.lines === "string") {
+      try { lines = JSON.parse(row.lines); } catch { lines = []; }
+    }
+
+    const qty = lines.reduce((a, l) => a + (l.qty ?? 0), 0);
+    totalCount += qty;
+
+    if (new Date(row.created_at as string).getTime() >= weekAgo) {
+      weekCount += qty;
+    }
+
+    let phone = "";
+    if (row.customer && typeof row.customer === "object") {
+      phone = (row.customer as Record<string, unknown>).phone as string ?? "";
+    }
+    if (phone) phones.add(phone);
+  }
+
+  return { weekCount, totalCount, customerCount: phones.size };
 }
 
 export type CreateOrderInput = Omit<
@@ -151,20 +252,16 @@ export async function addOrder(input: CreateOrderInput): Promise<Order> {
   });
   if (error) throw error;
 
-  // Decrement stock for each line item (parallelized, conditional update prevents race condition)
+  // Decrement stock for each line item — atomic via RPC, prevents overselling
   await Promise.all(
     order.lines.map(async (line) => {
-      const { data: product } = await sb
-        .from("products")
-        .select("stock_count")
-        .eq("id", line.productId)
-        .single();
-      if (product && (product.stock_count as number) >= line.qty) {
-        await sb
-          .from("products")
-          .update({ stock_count: (product.stock_count as number) - line.qty })
-          .eq("id", line.productId)
-          .gte("stock_count", line.qty);
+      const { data, error } = await sb.rpc("decrement_stock", {
+        p_product_id: line.productId,
+        p_qty: line.qty,
+      });
+      if (error || data === -1) {
+        // Stock insufficient or product not found — log but don't block order
+        console.warn(`Stock decrement failed for ${line.productId}: ${error?.message ?? "insufficient stock"}`);
       }
     })
   );

@@ -5,37 +5,18 @@ import { getStore } from "@/lib/store";
 import { listLiveProductsForStore } from "@/lib/products";
 import { isStoreOpen } from "@/lib/trial";
 import { listStoreSlugs } from "@/lib/stores";
-import { listOrders } from "@/lib/orders";
+import { getStoreFooterStats } from "@/lib/orders";
 import { Hero } from "@/components/storefront/hero";
 import { StorefrontHeader } from "@/components/storefront/header";
 import { ProductGrid } from "@/components/storefront/product-grid";
 import { EmptyStorefront } from "@/components/storefront/empty-state";
-import { StorefrontFooter, type StoreStats } from "@/components/storefront/footer";
+import { StorefrontFooter } from "@/components/storefront/footer";
 import { CartSheet } from "@/components/storefront/cart-sheet";
 import { ProductDetailSheet } from "@/components/storefront/product-detail-sheet";
 import type { Product } from "@/types/storefront";
 import type { SellerStore } from "@/types/seller";
-import type { Order } from "@/types/seller";
 
 type Params = { slug: string };
-
-function computeStoreStats(orders: Order[]): StoreStats {
-  const soldStatuses: Order["status"][] = ["verified", "shipped", "completed"];
-  const sold = orders.filter((o) => soldStatuses.includes(o.status));
-  if (sold.length === 0) return null;
-  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const weekQty = sold
-    .filter((o) => new Date(o.createdAt).getTime() >= weekAgo)
-    .reduce((acc, o) => acc + o.lines.reduce((a, l) => a + l.qty, 0), 0);
-  const totalQty = sold.reduce(
-    (acc, o) => acc + o.lines.reduce((a, l) => a + l.qty, 0),
-    0
-  );
-  const customerCount = new Set(
-    sold.map((o) => o.customer?.phone ?? o.customer?.name ?? o.id)
-  ).size;
-  return { weekCount: weekQty, totalCount: totalQty, customerCount };
-}
 
 export async function generateStaticParams(): Promise<Params[]> {
   const slugs = await listStoreSlugs();
@@ -66,9 +47,8 @@ export default async function StorefrontPage({
   if (!store) notFound();
 
   const products = (await listLiveProductsForStore(slug)) as Product[];
-  const orders = await listOrders(slug);
   const isOpen = isStoreOpen(store);
-  const stats = computeStoreStats(orders);
+  const stats = await getStoreFooterStats(slug);
 
   if (!isOpen) {
     return (

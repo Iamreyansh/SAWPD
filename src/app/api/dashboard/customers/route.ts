@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSeller, getActiveStoreSlugFromCookie } from "@/lib/seller-auth";
 import { getActiveStoreForSeller } from "@/lib/store";
-import { listOrders } from "@/lib/orders";
+import { listOrderSummaries } from "@/lib/orders";
 import { aggregateCustomers, customersToCsv } from "@/lib/customers";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ export async function GET() {
   if (!store) {
     return NextResponse.json({ error: "No shop selected" }, { status: 404 });
   }
-  const orders = await listOrders(store.slug);
+  const orders = await listOrderSummaries(store.slug);
   const customers = aggregateCustomers(orders);
   const csv = customersToCsv(customers);
   const filename = `${store.slug}-customers-${new Date().toISOString().slice(0, 10)}.csv`;

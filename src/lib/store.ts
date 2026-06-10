@@ -170,10 +170,14 @@ export async function updateStore(
 
   if (Object.keys(rowPatch).length === 0) return getStore(slug);
 
-  const { error } = await sb.from("stores").update(rowPatch).eq("slug", slug);
+  const { data, error } = await sb
+    .from("stores")
+    .update(rowPatch)
+    .eq("slug", slug)
+    .select()
+    .single();
   if (error) throw error;
-
-  return getStore(slug);
+  return data ? normalizeStore(rowToStore(data)) : null;
 }
 
 export async function addStore(
@@ -260,17 +264,30 @@ export async function activatePlanMock(
   plan: PlanId,
   options?: { asSellerId?: string }
 ): Promise<{ store: SellerStore; billing: BillingRecord } | null> {
-  const store = await getStore(slug);
-  if (!store) return null;
-  if (options?.asSellerId && store.sellerId !== options.asSellerId) return null;
+  const sb = createAdminClient();
+
+  // Single read for ownership check
+  if (options?.asSellerId) {
+    const current = await getStore(slug);
+    if (!current || current.sellerId !== options.asSellerId) return null;
+  }
 
   const now = new Date();
   const renewsAt = nextRenewalIso(plan, now);
-  const updated = await updateStore(slug, {
+
+  // Direct update + select (avoids double read via updateStore)
+  const rowPatch: Record<string, unknown> = {
     plan,
-    trialEndsAt: renewsAt,
-  });
-  if (!updated) return null;
+    trial_ends_at: renewsAt,
+  };
+  const { data: updatedRow, error: updateError } = await sb
+    .from("stores")
+    .update(rowPatch)
+    .eq("slug", slug)
+    .select()
+    .single();
+  if (updateError || !updatedRow) return null;
+  const updated = normalizeStore(rowToStore(updatedRow));
 
   const billing: BillingRecord = {
     id: newBillingId(),
@@ -281,7 +298,6 @@ export async function activatePlanMock(
     reference: planReference(),
   };
 
-  const sb = createAdminClient();
   const { error } = await sb.from("billing").insert({
     id: billing.id,
     store_slug: billing.storeSlug,
