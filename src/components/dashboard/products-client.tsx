@@ -453,6 +453,7 @@ function ProductFormSheet({
               error={fieldErrors.images}
             >
               <MultiImageUploader
+                storeSlug={storeSlug}
                 value={images}
                 onChange={(next) =>
                   setValue("images", next, { shouldValidate: true })
@@ -630,10 +631,12 @@ type PendingImage = {
 };
 
 function MultiImageUploader({
+  storeSlug,
   value,
   onChange,
   onError,
 }: {
+  storeSlug: string;
   value: ProductImage[];
   onChange: (images: ProductImage[]) => void;
   onError: (msg: string | null) => void;
@@ -679,7 +682,7 @@ function MultiImageUploader({
   const uploadFile = async (file: File): Promise<{ ok: true; img: ProductImage } | { ok: false; error: string }> => {
     const fd = new FormData();
     fd.append("file", file);
-    const result = await uploadProductImageAction(fd);
+    const result = await uploadProductImageAction(storeSlug, fd);
     if (!result.ok) return { ok: false, error: result.error };
     return { ok: true, img: { id: result.filename, url: result.url } };
   };

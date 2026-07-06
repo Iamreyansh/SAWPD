@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useParams } from "next/navigation";
-import { Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Minus, Plus, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Sheet,
@@ -16,19 +16,32 @@ import { useCartStore } from "@/store/cart-store";
 import { useUiStore } from "@/store/ui-store";
 import { useToast } from "@/components/ui/toaster";
 import { cn, formatINR } from "@/lib/utils";
+import { fireClientEvent, makeEvent } from "@/lib/pixels";
+import { SlotPicker } from "@/components/storefront/slot-picker";
 import type { Product } from "@/types/storefront";
+import type { ServiceSlot } from "@/lib/service-slots";
 
 type Props = {
   products: Product[];
+  /**
+   * Service slots keyed by productId. Only products with kind==="service"
+   * need slots passed in. Pass `{}` if you have no services.
+   */
+  serviceSlots?: Record<string, ServiceSlot[]>;
 };
 
-export function ProductDetailSheet({ products }: Props) {
+export function ProductDetailSheet({ products, serviceSlots = {} }: Props) {
   const productId = useUiStore((s) => s.productDetailId);
   const close = useUiStore((s) => s.closeProduct);
   const add = useCartStore((s) => s.add);
   const items = useCartStore((s) => s.items);
   const { toast } = useToast();
   const params = useParams();
+
+  // useParams() can return string | string[] | undefined; guard here so
+  // the cast below is honest.
+  const slugParam = params.slug;
+  const storeSlug = typeof slugParam === "string" ? slugParam : "";
 
   const product = products.find((p) => p.id === productId) ?? null;
   const [qty, setQty] = useState(1);
@@ -43,6 +56,21 @@ export function ProductDetailSheet({ products }: Props) {
     setQty(1);
     setActiveIdx(0);
   }, [productId]);
+
+  // Fire ViewContent when the detail sheet opens on a new product.
+  // Throttled by React's natural dedupe (one fire per productId).
+  useEffect(() => {
+    if (!product) return;
+    fireClientEvent(
+      makeEvent("ViewContent", {
+        value: product.price,
+        contentIds: [product.id],
+        contentName: product.title,
+        contentCategory: product.tags?.[0],
+        numItems: 1,
+      }),
+    );
+  }, [product]);
 
   const images = product?.images ?? [];
   const activeImage = images[activeIdx];
@@ -201,8 +229,22 @@ export function ProductDetailSheet({ products }: Props) {
                   Max stock reached — {currentCartQty} already in bag
                 </p>
               )}
+              {product.kind === "service" && (
+                <div className="mt-6">
+                  <p className="eyebrow-ink mb-3 flex items-center gap-1.5">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    Pick a time
+                  </p>
+                  <SlotPicker
+                    product={product}
+                    storeSlug={storeSlug}
+                    slots={serviceSlots[product.id] ?? []}
+                  />
+                </div>
+              )}
             </SheetBody>
 
+            {product.kind !== "service" && (
             <div className="border-t border-ink/5 bg-bone px-6 pb-6 pt-4">
               <div className="mb-4 flex items-center justify-between">
                 <p className="eyebrow-ink">Quantity</p>
@@ -233,7 +275,27 @@ export function ProductDetailSheet({ products }: Props) {
                 className="w-full"
                 disabled={maxAddable === 0}
                 onClick={() => {
-                  add(product.id, qty, params.slug as string);
+                  // The store-side cart enforces the stock cap, but we
+                  // also pass `product.stockCount` so the cap is honored
+                  // even if the UI is bypassed (devtools, race, etc).
+                  const result = add(product.id, qty, storeSlug, product.stockCount);
+                  if (result === "at_stock_cap") {
+                    toast({
+                      title: "Max stock reached",
+                      description: `Only ${product.stockCount} available`,
+                      variant: "vermillion",
+                    });
+                    return;
+                  }
+                  fireClientEvent(
+                    makeEvent("AddToCart", {
+                      value: product.price * qty,
+                      contentIds: [product.id],
+                      contentName: product.title,
+                      contentCategory: product.tags?.[0],
+                      numItems: qty,
+                    }),
+                  );
                   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
                     navigator.vibrate(10);
                   }
@@ -249,6 +311,7 @@ export function ProductDetailSheet({ products }: Props) {
                 {maxAddable === 0 ? "Max stock reached" : `Add to bag · ${formatINR(product.price * qty)}`}
               </Button>
             </div>
+            )}
           </>
         )}
       </SheetContent>

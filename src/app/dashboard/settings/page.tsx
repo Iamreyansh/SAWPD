@@ -4,9 +4,14 @@ import { getTrialState } from "@/lib/trial";
 import { SettingsForm } from "@/components/dashboard/settings-form";
 import { PlanPicker } from "@/components/dashboard/plan-picker";
 import { ReturnsPolicyForm } from "@/components/dashboard/returns-policy-form";
+import { FeatureToggles } from "@/components/dashboard/feature-toggles";
 import { DEFAULT_RETURNS_POLICY } from "@/types/storefront";
 
-export const metadata = { title: "Dashboard · Settings" };
+export const metadata = {
+  title: "Dashboard · Settings",
+  description: "Shop settings: profile, UPI, hero, returns policy, plan.",
+  robots: { index: false, follow: false },
+};
 export const dynamic = "force-dynamic";
 
 function formatDate(iso: string | undefined): string {
@@ -86,6 +91,23 @@ export default async function SettingsPage() {
         storeSlug={store.slug}
         policy={store.returnsPolicy ?? DEFAULT_RETURNS_POLICY}
       />
+
+      <div>
+        <p className="eyebrow mb-4 mt-12">Features</p>
+        <FeatureToggles
+          storeSlug={store.slug}
+          enabled={store.customOrdersEnabled ?? false}
+        />
+        <div className="mt-4">
+          <FeatureToggles
+            storeSlug={store.slug}
+            enabled={store.servicesEnabled ?? false}
+            featureKey="servicesEnabled"
+            title="Service bookings"
+            description="Turn your shop into a bookable service — massages, cleanings, consultations, anything that runs on appointments instead of shipping. Mark a product as a Service in /dashboard/products to start taking bookings."
+          />
+        </div>
+      </div>
     </div>
   );
 }

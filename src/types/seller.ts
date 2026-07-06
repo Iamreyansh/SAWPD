@@ -77,6 +77,8 @@ export type SellerStore = Store & {
   sellerId: string;
   plan?: "weekly" | "monthly";
   trialEndsAt?: string;
+  customOrdersEnabled?: boolean;
+  servicesEnabled?: boolean;
 };
 
 export type DashboardStats = {

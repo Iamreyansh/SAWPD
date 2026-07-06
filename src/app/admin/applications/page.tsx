@@ -8,7 +8,11 @@ import { ApplicationsDateFilter } from "./date-filter";
 import { formatINR, timeAgo } from "@/lib/utils";
 import type { ApplicationStatus } from "@/types/applications";
 
-export const metadata = { title: "Admin · Applications" };
+export const metadata = {
+  title: "Admin · Applications",
+  description: "Seller applications awaiting review.",
+  robots: { index: false, follow: false },
+};
 
 export const dynamic = "force-dynamic";
 

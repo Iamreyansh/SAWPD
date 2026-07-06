@@ -5,7 +5,7 @@ import { listStoreSummaries } from "@/lib/stores";
 import { Logo } from "@/components/ui/logo";
 
 export const metadata = {
-  title: "Live shops — SAWPD",
+  title: "Live shops",
   description:
     "Browse Instagram creators selling on SAWPD. Pay via UPI, get it shipped.",
 };

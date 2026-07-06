@@ -17,6 +17,8 @@ import {
   ChevronDown,
   Menu,
   X,
+  Sparkles,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sellerLogoutAction, setActiveStoreAction } from "@/app/seller/actions";
@@ -27,6 +29,8 @@ const navItems = [
   { href: "/dashboard/returns", label: "Returns", icon: Undo2 },
   { href: "/dashboard/customers", label: "Customers", icon: Users },
   { href: "/dashboard/products", label: "Products", icon: Package },
+  { href: "/dashboard/custom-orders", label: "Custom Orders", icon: Sparkles, featureFlag: "customOrdersEnabled" as const },
+  { href: "/dashboard/services", label: "Services", icon: CalendarDays, featureFlag: "servicesEnabled" as const },
   { href: "/dashboard/promotions", label: "Promotions", icon: Tag },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
@@ -43,15 +47,25 @@ export function DashboardShell({
   activeStoreName,
   activeStoreSlug,
   stores,
+  customOrdersEnabled = false,
+  servicesEnabled = false,
 }: {
   children: React.ReactNode;
   sellerEmail: string;
   activeStoreName: string;
   activeStoreSlug: string;
   stores: DashboardStoreOption[];
+  customOrdersEnabled?: boolean;
+  servicesEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const visibleNavItems = navItems.filter((item) => {
+    if (!("featureFlag" in item)) return true;
+    if (item.featureFlag === "customOrdersEnabled") return customOrdersEnabled;
+    if (item.featureFlag === "servicesEnabled") return servicesEnabled;
+    return true;
+  });
   return (
     <div className="min-h-screen bg-bone">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-ink/[0.07] bg-bone md:flex md:flex-col">
@@ -69,7 +83,7 @@ export function DashboardShell({
           </div>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-5">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const active = item.exact
               ? pathname === item.href
               : pathname.startsWith(item.href);

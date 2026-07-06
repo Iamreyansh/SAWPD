@@ -5,7 +5,7 @@ import { LoginForm } from "./login-form";
 import { Logo } from "@/components/ui/logo";
 
 export const metadata = {
-  title: "Log in — SAWPD",
+  title: "Log in",
   description: "Log in to manage your shop on SAWPD.",
 };
 

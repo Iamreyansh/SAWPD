@@ -7,6 +7,7 @@ import { CustomersClient } from "@/components/dashboard/customers-client";
 export const metadata = {
   title: "Dashboard · Customers",
   description: "See your buyers, their lifetime value, and order history.",
+  robots: { index: false, follow: false },
 };
 export const dynamic = "force-dynamic";
 

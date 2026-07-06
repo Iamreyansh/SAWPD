@@ -21,6 +21,8 @@ function rowToProduct(row: Record<string, unknown>): Product | null {
     try { tags = JSON.parse(row.tags); } catch { tags = []; }
   }
 
+  const kind = (row.kind as Product["kind"]) ?? "product";
+
   return {
     id: row.id as string,
     slug: (row.slug as string) || row.id as string,
@@ -34,6 +36,9 @@ function rowToProduct(row: Record<string, unknown>): Product | null {
     tags,
     status: (row.status as Product["status"]) ?? "live",
     scheduledFor: (row.scheduled_for as string) || undefined,
+    kind,
+    durationMinutes: (row.duration_minutes as number) ?? undefined,
+    location: (row.location as string) ?? undefined,
   };
 }
 
@@ -52,6 +57,9 @@ function productToRow(product: Product, storeSlug: string): Record<string, unkno
     tags: product.tags ?? [],
     status: product.status ?? "live",
     scheduled_for: product.scheduledFor || null,
+    kind: product.kind ?? "product",
+    duration_minutes: product.durationMinutes ?? null,
+    location: product.location ?? null,
   };
 }
 

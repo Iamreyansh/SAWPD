@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/ui/logo";
 
 export const metadata = {
-  title: "Terms of Service — SAWPD",
+  title: "Terms of Service",
   description: "The rules and guidelines for using SAWPD.",
 };
 

@@ -9,6 +9,7 @@ import { useUiStore } from "@/store/ui-store";
 import { useToast } from "@/components/ui/toaster";
 import type { Product } from "@/types/storefront";
 import { cn, formatINR } from "@/lib/utils";
+import { fireClientEvent, makeEvent } from "@/lib/pixels";
 
 type Props = {
   product: Product;
@@ -21,10 +22,6 @@ export function ProductCard({ product, index }: Props) {
   const { toast } = useToast();
   const params = useParams();
   const reducedMotion = useReducedMotion();
-  // Tracks post-mount decisions only. Starts false so the SSR and the
-  // first client render are identical (avoids hydration mismatch), then
-  // the effect below can flip it true if reduced motion is on or after
-  // the 1.5s safety net.
   const [skipAnimate, setSkipAnimate] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -34,9 +31,6 @@ export function ProductCard({ product, index }: Props) {
       setSkipAnimate(true);
       return;
     }
-    // Safety net: if whileInView hasn't fired (slow scroller, headless
-    // scraper, very tall viewport, etc), reveal the card after 1.5s so
-    // it's never permanently invisible.
     const t = setTimeout(() => setSkipAnimate(true), 1500);
     return () => clearTimeout(t);
   }, [reducedMotion]);
@@ -45,12 +39,12 @@ export function ProductCard({ product, index }: Props) {
   const isSoldOut = !product.isAvailable || product.stockCount === 0;
   const isOnSale = product.tags?.includes("sale") ?? false;
 
-  // Render a plain <div> once we've decided to skip the animation
-  // (reduced motion, or the safety net has fired). The card is visible
-  // by default; no opacity:0 surprise for scrapers, reduced-motion
-  // users, or slow scrollers.
+  // useParams() in Next 15 can return string | string[] | undefined.
+  const slugParam = params.slug;
+  const storeSlug = typeof slugParam === "string" ? slugParam : "";
+
   if (mounted && skipAnimate) {
-    return <div className="group">{renderCard({ product, isLowStock, isSoldOut, isOnSale, add, openProduct, toast, storeSlug: params.slug as string })}</div>;
+    return <div className="group">{renderCard({ product, isLowStock, isSoldOut, isOnSale, add, openProduct, toast, storeSlug })}</div>;
   }
 
   return (
@@ -62,7 +56,7 @@ export function ProductCard({ product, index }: Props) {
       className="group"
       data-animate-up={mounted ? "true" : undefined}
     >
-      {renderCard({ product, isLowStock, isSoldOut, isOnSale, add, openProduct, toast, storeSlug: params.slug as string })}
+      {renderCard({ product, isLowStock, isSoldOut, isOnSale, add, openProduct, toast, storeSlug })}
     </motion.div>
   );
 }
@@ -72,7 +66,12 @@ type RenderArgs = {
   isLowStock: boolean;
   isSoldOut: boolean;
   isOnSale: boolean;
-  add: (id: string, qty: number, storeSlug?: string) => void;
+  add: (
+    id: string,
+    qty: number,
+    storeSlug?: string,
+    stockCount?: number,
+  ) => "added" | "replaced_store" | "at_stock_cap";
   openProduct: (id: string) => void;
   toast: (t: { title: string; description?: string }) => void;
   storeSlug: string;
@@ -134,23 +133,30 @@ function renderCard({
             </span>
           )}
 
-          {/* Quick add — mobile only, sits on image */}
+          {/* Quick add — visible on hover (desktop) and always on touch via :focus-within. */}
           {!isSoldOut && (
             <span
               role="button"
-              tabIndex={-1}
+              tabIndex={0}
               onClick={(e) => {
                 e.stopPropagation();
-                const cartItems = useCartStore.getState().items;
-                const currentQty = cartItems.find((i) => i.productId === product.id)?.qty ?? 0;
-                if (currentQty >= product.stockCount) {
+                const result = add(product.id, 1, storeSlug, product.stockCount);
+                if (result === "at_stock_cap") {
                   toast({
                     title: "Max stock reached",
                     description: `Only ${product.stockCount} available`,
                   });
                   return;
                 }
-                add(product.id, 1, storeSlug);
+                fireClientEvent(
+                  makeEvent("AddToCart", {
+                    value: product.price,
+                    contentIds: [product.id],
+                    contentName: product.title,
+                    contentCategory: product.tags?.[0],
+                    numItems: 1,
+                  }),
+                );
                 if (typeof navigator !== "undefined" && "vibrate" in navigator) {
                   navigator.vibrate(8);
                 }
@@ -159,7 +165,30 @@ function renderCard({
                   description: product.title,
                 });
               }}
-              className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-vermillion text-bone opacity-0 shadow-glow transition-all duration-300 group-hover:opacity-100 group-focus-within:opacity-100 active:scale-90 md:opacity-0 md:group-hover:opacity-100"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const result = add(product.id, 1, storeSlug, product.stockCount);
+                  if (result === "at_stock_cap") {
+                    toast({
+                      title: "Max stock reached",
+                      description: `Only ${product.stockCount} available`,
+                    });
+                    return;
+                  }
+                  fireClientEvent(
+                    makeEvent("AddToCart", {
+                      value: product.price,
+                      contentIds: [product.id],
+                      contentName: product.title,
+                      contentCategory: product.tags?.[0],
+                      numItems: 1,
+                    }),
+                  );
+                }
+              }}
+              className="absolute bottom-3 right-3 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-vermillion text-bone opacity-0 shadow-glow transition-all duration-300 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 active:scale-90 md:opacity-0 md:group-hover:opacity-100"
               aria-label={`Add ${product.title} to bag`}
             >
               <span className="text-xl leading-none">+</span>

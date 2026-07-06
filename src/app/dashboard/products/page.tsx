@@ -3,7 +3,11 @@ import { requireActiveStore } from "@/lib/seller-auth";
 import { listProductsForStore } from "@/lib/products";
 import { ProductsClient } from "@/components/dashboard/products-client";
 
-export const metadata = { title: "Dashboard · Products" };
+export const metadata = {
+  title: "Dashboard · Products",
+  description: "Manage your shop's products, stock, and pricing.",
+  robots: { index: false, follow: false },
+};
 export const dynamic = "force-dynamic";
 
 export default async function ProductsPage() {

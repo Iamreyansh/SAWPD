@@ -21,6 +21,7 @@ import { loginProtection } from "@/lib/brute-force";
 import { getClientIp } from "@/lib/get-ip";
 import { deleteUploadIfLocal } from "@/lib/uploads";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { LOW_STOCK_THRESHOLD } from "@/lib/utils";
 
 async function requireAdmin(): Promise<boolean> {
   return isAdmin();
@@ -313,7 +314,7 @@ export async function adminForceLowStockAction(storeSlug: string): Promise<Force
   if (!store) return { ok: false, error: "Store not found." };
   const products = await listProductsForStore(storeSlug);
   const flagged = products
-    .filter((p) => p.isAvailable && p.stockCount > 0 && p.stockCount <= 5)
+    .filter((p) => p.isAvailable && p.stockCount > 0 && p.stockCount <= LOW_STOCK_THRESHOLD)
     .map((p) => ({ title: p.title, stockCount: p.stockCount }));
   if (flagged.length === 0) return { ok: true, count: 0 };
   await notifyLowStock({

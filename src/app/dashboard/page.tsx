@@ -12,7 +12,11 @@ import { OnboardingBanner, type OnboardingStep } from "@/components/dashboard/on
 import { WelcomeNotification } from "@/components/dashboard/welcome-notification";
 import type { Order } from "@/types/seller";
 
-export const metadata = { title: "Dashboard · Overview" };
+export const metadata = {
+  title: "Dashboard · Overview",
+  description: "Your shop overview: revenue, orders, low-stock alerts.",
+  robots: { index: false, follow: false },
+};
 export const dynamic = "force-dynamic";
 
 export default async function DashboardOverviewPage() {

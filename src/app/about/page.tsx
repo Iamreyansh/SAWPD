@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/ui/logo";
 
 export const metadata = {
-  title: "About — SAWPD",
+  title: "About",
   description: "The story behind SAWPD — why we built it and who it's for.",
 };
 

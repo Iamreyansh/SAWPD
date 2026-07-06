@@ -23,22 +23,48 @@ import {
   listPromosForStore,
   updatePromo,
 } from "@/lib/promos";
+import {
+  addTemplate,
+  deleteTemplate,
+  toggleTemplateActive,
+  updateTemplate,
+} from "@/lib/custom-templates";
+import { getOrder as getCustomOrder } from "@/lib/custom-orders";
+import type { CustomOrderStatus } from "@/types/custom-orders";
+import {
+  blockSlot,
+  deleteSlot as deleteServiceSlot,
+  generateAvailability,
+  listSlotsForStore,
+} from "@/lib/service-slots";
 import { appendAudit } from "@/lib/audit";
+import { notifyOrderStatusChanged, notifyStoreEmail } from "@/lib/notify";
 
 const productSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  tagline: z.string().min(1, "Tagline is required"),
-  price: z.coerce.number().int().min(1, "Price must be at least ₹1"),
-  altText: z.string().min(1, "Alt text is required"),
+  title: z.string().min(1, "Title is required").max(120),
+  tagline: z.string().min(1, "Tagline is required").max(160),
+  price: z.coerce
+    .number()
+    .int()
+    .min(1, "Price must be at least ₹1")
+    .max(10_000_000, "Price must be under ₹1 crore"),
+  altText: z.string().min(1, "Alt text is required").max(200),
   images: z
     .array(z.object({ id: z.string(), url: z.string().url("Enter a valid image URL") }))
     .min(1, "Add at least one image")
     .max(MAX_PRODUCT_IMAGES, `Up to ${MAX_PRODUCT_IMAGES} images`),
-  stockCount: z.coerce.number().int().min(0, "Stock must be 0 or more"),
+  stockCount: z.coerce
+    .number()
+    .int()
+    .min(0, "Stock must be 0 or more")
+    .max(1_000_000, "Stock must be under 1 million"),
   isAvailable: z.coerce.boolean().optional().default(true),
-  tags: z.array(z.string()).optional().default([]),
+  tags: z.array(z.string()).max(20).optional().default([]),
   slug: z.string().optional(),
   status: z.enum(["live", "draft"]).optional().default("live"),
+  kind: z.enum(["product", "service"]).optional().default("product"),
+  durationMinutes: z.coerce.number().int().min(5).max(24 * 60).optional(),
+  location: z.string().max(200).optional().or(z.literal("")),
 });
 
 export type ProductFormInput = z.infer<typeof productSchema>;
@@ -190,13 +216,15 @@ export async function deleteProductAction(
 }
 
 export async function uploadProductImageAction(
+  storeSlug: string,
   formData: FormData
 ): Promise<
   | { ok: true; url: string; filename: string }
   | { ok: false; error: string }
 > {
-  const seller = await requireSeller();
-  if (!seller) return { ok: false, error: "Not authenticated." };
+  // Ownership check — prevents any signed-in seller from filling the
+  // bucket with arbitrary content via the dashboard's image uploader.
+  await assertOwnsStore(storeSlug);
   const file = formData.get("file");
   if (!(file instanceof File)) {
     return { ok: false, error: "No file received." };
@@ -205,13 +233,13 @@ export async function uploadProductImageAction(
 }
 
 export async function uploadHeroImageAction(
+  storeSlug: string,
   formData: FormData
 ): Promise<
   | { ok: true; url: string; filename: string }
   | { ok: false; error: string }
 > {
-  const seller = await requireSeller();
-  if (!seller) return { ok: false, error: "Not authenticated." };
+  await assertOwnsStore(storeSlug);
   const file = formData.get("file");
   if (!(file instanceof File)) {
     return { ok: false, error: "No file received." };
@@ -247,11 +275,21 @@ export async function updateOrderStatusAction(
   const existing = await getOrder(parsed.data.orderId);
   if (!existing) return { ok: false, error: "Order not found." };
   await assertOwnsStore(existing.storeSlug);
-  void seller;
-  const updated = await updateOrderStatus(parsed.data.orderId, {
-    status: parsed.data.status,
-    trackingNote: parsed.data.trackingNote,
-  });
+  // updateOrderStatus() in lib/orders.ts enforces the state machine
+  // (valid transitions per current status). Let it throw if invalid so
+  // the UI surfaces a clear error.
+  let updated;
+  try {
+    updated = await updateOrderStatus(parsed.data.orderId, {
+      status: parsed.data.status,
+      trackingNote: parsed.data.trackingNote,
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Invalid status transition.",
+    };
+  }
   if (!updated) return { ok: false, error: "Order not found." };
   if (
     parsed.data.status === "verified" ||
@@ -259,18 +297,20 @@ export async function updateOrderStatusAction(
     parsed.data.status === "completed" ||
     parsed.data.status === "cancelled"
   ) {
-    const { getStoreForSeller } = await import("@/lib/store");
-    const { notifyOrderStatusChanged } = await import("@/lib/notify");
-    const store = await getStoreForSeller(updated.storeSlug, seller.id);
-    if (store) {
-      await notifyOrderStatusChanged({
-        storeName: store.name,
-        storeEmail: store.notifyEmail || undefined,
-        orderId: updated.id,
-        customerName: updated.customer.name,
-        status: parsed.data.status,
-        trackingNote: parsed.data.trackingNote,
-      });
+    try {
+      const store = await getStoreForSeller(updated.storeSlug, seller.id);
+      if (store) {
+        await notifyOrderStatusChanged({
+          storeName: store.name,
+          storeEmail: store.notifyEmail || undefined,
+          orderId: updated.id,
+          customerName: updated.customer.name,
+          status: parsed.data.status,
+          trackingNote: parsed.data.trackingNote,
+        });
+      }
+    } catch (err) {
+      console.error("notifyOrderStatusChanged failed:", err);
     }
   }
   revalidatePath("/dashboard");
@@ -324,19 +364,6 @@ export async function choosePlanAction(
   if (!result) {
     return { ok: false, error: "Store not found." };
   }
-  const { notifyTrialEnding } = await import("@/lib/notify");
-  const days = Math.max(
-    1,
-    Math.ceil(
-      (new Date(result.store.trialEndsAt ?? new Date()).getTime() - Date.now()) /
-        (24 * 60 * 60 * 1000)
-    )
-  );
-  await notifyTrialEnding({
-    storeName: result.store.name,
-    storeEmail: result.store.notifyEmail || undefined,
-    daysLeft: days,
-  });
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
   revalidatePath(`/s/${storeSlug}`);
@@ -673,14 +700,27 @@ export async function decideReturnAction(
   if (existing.status !== "pending") {
     return { ok: false, error: "This return has already been decided." };
   }
+  // Cap refundAmount by the originating order total so a seller cannot
+  // approve a refund larger than what the customer actually paid.
+  let refundAmount = parsed.data.refundAmount;
+  if (refundAmount !== undefined) {
+    const order = await getOrder(existing.orderId);
+    if (!order) return { ok: false, error: "Order not found." };
+    if (refundAmount > order.total) refundAmount = order.total;
+    // Per-product cap: cannot exceed the line total being refunded.
+    const line = order.lines.find((l) => l.productId === existing.productId);
+    if (line && refundAmount > line.price * existing.qty) {
+      refundAmount = line.price * existing.qty;
+    }
+  }
   const updated = await updateReturnStatus({
     id: parsed.data.id,
     status: parsed.data.status,
     note: parsed.data.note,
-    refundAmount: parsed.data.refundAmount,
+    refundAmount,
   });
   if (!updated) return { ok: false, error: "Could not save decision." };
-  appendAudit({
+  await appendAudit({
     kind: "return_decided",
     storeSlug: updated.storeSlug,
     returnId: updated.id,
@@ -690,5 +730,432 @@ export async function decideReturnAction(
   revalidatePath(`/dashboard/orders/${updated.orderId}`);
   revalidatePath(`/dashboard/returns`);
   revalidatePath(`/track`);
+  return { ok: true };
+}
+
+// ─── Custom Orders (per-store, authenticated) ──────────────────────
+
+const templateFieldSchema = z.object({
+  id: z.string().optional(),
+  label: z.string().min(1).max(120),
+  type: z.enum(["single_select", "multi_select", "number", "text", "date"]),
+  required: z.boolean().default(false),
+  options: z
+    .array(z.object({ label: z.string().min(1).max(120), price: z.coerce.number().int().min(0).max(1_000_000) }))
+    .max(20)
+    .default([]),
+  placeholder: z.string().max(200).optional(),
+  helpText: z.string().max(200).optional(),
+  displayOrder: z.coerce.number().int().min(0).default(0),
+});
+
+const templateSchema = z.object({
+  name: z.string().min(1).max(80),
+  description: z.string().max(500).optional().default(""),
+  imageUrl: z.string().url().or(z.literal("")).default(""),
+  basePrice: z.coerce.number().int().min(0).max(1_000_000),
+  fields: z.array(templateFieldSchema).min(1).max(15),
+  isActive: z.boolean().default(true),
+  displayOrder: z.coerce.number().int().min(0).default(0),
+});
+
+export type TemplateResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string; fieldErrors?: Record<string, string> };
+
+function templateFieldErrors(err: z.ZodError): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const issue of err.issues) {
+    const key = issue.path[0];
+    if (typeof key === "string" && !out[key]) out[key] = issue.message;
+  }
+  return out;
+}
+
+export async function createCustomTemplateAction(
+  input: unknown
+): Promise<TemplateResult> {
+  const store = await requireActiveStore();
+  if (!store.customOrdersEnabled) {
+    return { ok: false, error: "Custom orders are not enabled for this shop." };
+  }
+  const parsed = templateSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Please fix the highlighted fields.",
+      fieldErrors: templateFieldErrors(parsed.error),
+    };
+  }
+  const t = await addTemplate(store.slug, {
+    ...parsed.data,
+    description: parsed.data.description ?? "",
+    imageUrl: parsed.data.imageUrl ?? "",
+    fields: parsed.data.fields.map((f, i) => ({
+      ...f,
+      id: f.id || `fld_${crypto.randomUUID().slice(0, 8)}`,
+      displayOrder: f.displayOrder ?? i,
+    })),
+  });
+  revalidatePath("/dashboard/custom-templates");
+  revalidatePath(`/s/${store.slug}/custom`);
+  return { ok: true, id: t.id };
+}
+
+export async function updateCustomTemplateAction(
+  templateId: string,
+  input: unknown
+): Promise<TemplateResult> {
+  const store = await requireActiveStore();
+  if (!store.customOrdersEnabled) {
+    return { ok: false, error: "Custom orders are not enabled for this shop." };
+  }
+  const parsed = templateSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Please fix the highlighted fields.",
+      fieldErrors: templateFieldErrors(parsed.error),
+    };
+  }
+  const updated = await updateTemplate(templateId, store.slug, {
+    ...parsed.data,
+    description: parsed.data.description ?? "",
+    imageUrl: parsed.data.imageUrl ?? "",
+    fields: parsed.data.fields.map((f, i) => ({
+      ...f,
+      id: f.id || `fld_${crypto.randomUUID().slice(0, 8)}`,
+      displayOrder: f.displayOrder ?? i,
+    })),
+  });
+  if (!updated) return { ok: false, error: "Template not found." };
+  revalidatePath("/dashboard/custom-templates");
+  revalidatePath(`/dashboard/custom-templates/${templateId}`);
+  revalidatePath(`/s/${store.slug}/custom`);
+  return { ok: true, id: templateId };
+}
+
+export async function toggleCustomTemplateActiveAction(
+  templateId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const store = await requireActiveStore();
+  if (!store.customOrdersEnabled) {
+    return { ok: false, error: "Custom orders are not enabled for this shop." };
+  }
+  const updated = await toggleTemplateActive(templateId, store.slug);
+  if (!updated) return { ok: false, error: "Template not found." };
+  revalidatePath("/dashboard/custom-templates");
+  revalidatePath(`/s/${store.slug}/custom`);
+  return { ok: true };
+}
+
+export async function deleteCustomTemplateAction(
+  templateId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const store = await requireActiveStore();
+  if (!store.customOrdersEnabled) {
+    return { ok: false, error: "Custom orders are not enabled for this shop." };
+  }
+  // Block if there are pending orders referencing this template
+  const { listOrdersForStore } = await import("@/lib/custom-orders");
+  const orders = await listOrdersForStore(store.slug);
+  const hasPending = orders.some(
+    (o) =>
+      o.templateId === templateId &&
+      ["pending", "awaiting_payment", "awaiting_verification", "confirmed"].includes(
+        o.status
+      )
+  );
+  if (hasPending) {
+    return {
+      ok: false,
+      error:
+        "Cannot delete template — it has pending or active orders. Fulfil or cancel them first.",
+    };
+  }
+  await deleteTemplate(templateId, store.slug);
+  revalidatePath("/dashboard/custom-templates");
+  revalidatePath(`/s/${store.slug}/custom`);
+  return { ok: true };
+}
+
+// Settings toggle for the feature itself
+export async function toggleCustomOrdersFeatureAction(
+  enabled: boolean
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const store = await requireActiveStore();
+  await updateStore(
+    store.slug,
+    { customOrdersEnabled: enabled },
+    { asSellerId: store.sellerId }
+  );
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+  revalidatePath(`/s/${store.slug}/custom`);
+  return { ok: true };
+}
+
+const customOrderStatusSchema = z.object({
+  orderId: z.string().min(1),
+  status: z.enum(["confirmed", "fulfilled", "rejected"]),
+  sellerNote: z.string().max(500).optional(),
+});
+
+export type CustomOrderDecisionResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function decideCustomOrderAction(
+  input: unknown
+): Promise<CustomOrderDecisionResult> {
+  const store = await requireActiveStore();
+  if (!store.customOrdersEnabled) {
+    return { ok: false, error: "Custom orders are not enabled for this shop." };
+  }
+  const parsed = customOrderStatusSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input." };
+
+  const existing = await getCustomOrder(parsed.data.orderId);
+  if (!existing || existing.storeSlug !== store.slug) {
+    return { ok: false, error: "Order not found." };
+  }
+  try {
+    const { updateOrderStatus } = await import("@/lib/custom-orders");
+    const updated = await updateOrderStatus(parsed.data.orderId, {
+      status: parsed.data.status as CustomOrderStatus,
+      sellerNote: parsed.data.sellerNote,
+    });
+    if (!updated) return { ok: false, error: "Could not update order." };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Invalid status transition.",
+    };
+  }
+  revalidatePath("/dashboard/custom-orders");
+  revalidatePath(`/dashboard/custom-orders/${parsed.data.orderId}`);
+  revalidatePath(`/s/${store.slug}/custom`);
+  return { ok: true };
+}
+
+// ─── Customer-facing custom order submission (no auth) ──────────
+
+const customerSubmitSchema = z.object({
+  templateId: z.string().min(1),
+  customerName: z.string().min(2).max(120),
+  customerPhone: z
+    .string()
+    .min(10)
+    .max(20)
+    .regex(/^\+?[0-9\s-]+$/, "Invalid phone"),
+  customerEmail: z.string().email().optional().or(z.literal("")),
+  selections: z.record(z.union([z.string(), z.array(z.string()), z.number()])),
+  quantity: z.coerce.number().int().min(1).max(20).default(1),
+  specialInstructions: z.string().max(1000).optional().default(""),
+  preferredDate: z.string().optional().default(""),
+  referenceImage: z.string().optional().default(""),
+});
+
+export type CustomerCustomOrderResult =
+  | { ok: true; orderId: string }
+  | { ok: false; error: string; fieldErrors?: Record<string, string> };
+
+export async function submitCustomerCustomOrder(
+  storeSlug: string,
+  input: unknown
+): Promise<CustomerCustomOrderResult> {
+  // Rate-limit like checkout — anonymous endpoint, must be throttled.
+  const { checkoutLimiter } = await import("@/lib/rate-limit");
+  const { getClientIp } = await import("@/lib/get-ip");
+  const ip = await getClientIp();
+  if (!checkoutLimiter.check(`custom-order:${ip}`)) {
+    const retryMs = checkoutLimiter.retryAfter(`custom-order:${ip}`);
+    const retrySec = Math.ceil(retryMs / 1000);
+    return {
+      ok: false,
+      error: `Too many requests. Wait ${retrySec}s and try again.`,
+    };
+  }
+
+  const parsed = customerSubmitSchema.safeParse(input);
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const key = issue.path.join(".");
+      if (!fieldErrors[key]) fieldErrors[key] = issue.message;
+    }
+    return { ok: false, error: "Please check the form.", fieldErrors };
+  }
+
+  const { getTemplate } = await import("@/lib/custom-templates");
+  const { validateSelections, calculatePrice } = await import(
+    "@/lib/custom-order-utils"
+  );
+  const template = await getTemplate(parsed.data.templateId);
+  if (!template || template.storeSlug !== storeSlug || !template.isActive) {
+    return { ok: false, error: "Template not found." };
+  }
+
+  const validationErrors = validateSelections(
+    template,
+    parsed.data.selections,
+  );
+  if (validationErrors.length > 0) {
+    const fieldErrors: Record<string, string> = {};
+    for (const err of validationErrors) {
+      fieldErrors[err.fieldId] = err.message;
+    }
+    return {
+      ok: false,
+      error: "Please fill in all required fields.",
+      fieldErrors,
+    };
+  }
+
+  const breakdown = calculatePrice(
+    template,
+    parsed.data.selections,
+    parsed.data.quantity,
+  );
+
+  const { addOrder: persistCustomOrder } = await import("@/lib/custom-orders");
+  const order = await persistCustomOrder({
+    storeSlug: template.storeSlug,
+    templateId: template.id,
+    templateName: template.name,
+    customerName: parsed.data.customerName,
+    customerPhone: parsed.data.customerPhone,
+    customerEmail: parsed.data.customerEmail || undefined,
+    selections: parsed.data.selections,
+    calculatedPrice: breakdown.total,
+    quantity: parsed.data.quantity,
+    totalPrice: breakdown.total,
+    referenceImage: parsed.data.referenceImage || undefined,
+    specialInstructions: parsed.data.specialInstructions || undefined,
+    preferredDate: parsed.data.preferredDate || undefined,
+  });
+
+  revalidatePath(`/s/${storeSlug}/custom`);
+  revalidatePath("/dashboard/custom-orders");
+  return { ok: true, orderId: order.id };
+}
+
+// ─── Service bookings (per-store) ───────────────────────────────
+
+export async function toggleServicesFeatureAction(
+  enabled: boolean
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const store = await requireActiveStore();
+  await updateStore(
+    store.slug,
+    { servicesEnabled: enabled },
+    { asSellerId: store.sellerId }
+  );
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+  revalidatePath(`/s/${store.slug}`);
+  return { ok: true };
+}
+
+const generateAvailabilitySchema = z.object({
+  productId: z.string().min(1),
+  fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  slotMinutes: z.coerce.number().int().min(5).max(24 * 60),
+  capacity: z.coerce.number().int().min(1).max(100).optional().default(1),
+});
+
+export type GenerateAvailabilityResult =
+  | { ok: true; created: number; skipped: number }
+  | { ok: false; error: string };
+
+export async function generateAvailabilityAction(
+  input: unknown
+): Promise<GenerateAvailabilityResult> {
+  const store = await requireActiveStore();
+  if (!store.servicesEnabled) {
+    return { ok: false, error: "Services are not enabled for this shop." };
+  }
+  const parsed = generateAvailabilitySchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+
+  // Verify the product is actually a service belonging to this store.
+  const { getProduct } = await import("@/lib/products");
+  const product = await getProduct(store.slug, parsed.data.productId);
+  if (!product || product.kind !== "service") {
+    return {
+      ok: false,
+      error: "Product not found or isn't a service.",
+    };
+  }
+
+  try {
+    const result = await generateAvailability({
+      storeSlug: store.slug,
+      productId: parsed.data.productId,
+      fromDate: parsed.data.fromDate,
+      toDate: parsed.data.toDate,
+      startTime: parsed.data.startTime,
+      endTime: parsed.data.endTime,
+      slotMinutes: parsed.data.slotMinutes,
+      capacity: parsed.data.capacity,
+    });
+    revalidatePath(`/dashboard/services/${parsed.data.productId}`);
+    return {
+      ok: true,
+      created: result.created,
+      skipped: result.skipped,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to generate slots.",
+    };
+  }
+}
+
+export async function blockSlotAction(
+  slotId: string,
+  blocked: boolean
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const store = await requireActiveStore();
+  if (!store.servicesEnabled) {
+    return { ok: false, error: "Services are not enabled for this shop." };
+  }
+  // Ownership check via listSlotsForStore + filter — keeps the helper
+  // API simple.
+  const all = await listSlotsForStore(store.slug);
+  if (!all.find((s) => s.id === slotId)) {
+    return { ok: false, error: "Slot not found." };
+  }
+  await blockSlot(slotId, blocked);
+  revalidatePath("/dashboard/services");
+  return { ok: true };
+}
+
+export async function deleteServiceSlotAction(
+  slotId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const store = await requireActiveStore();
+  if (!store.servicesEnabled) {
+    return { ok: false, error: "Services are not enabled for this shop." };
+  }
+  const all = await listSlotsForStore(store.slug);
+  const slot = all.find((s) => s.id === slotId);
+  if (!slot) return { ok: false, error: "Slot not found." };
+  // Refuse to delete slots that have bookings — seller should cancel
+  // the order or block the slot instead.
+  if (slot.bookedCount > 0) {
+    return {
+      ok: false,
+      error: "Can't delete a slot with bookings. Block it instead.",
+    };
+  }
+  await deleteServiceSlot(slotId);
+  revalidatePath("/dashboard/services");
   return { ok: true };
 }

@@ -37,6 +37,8 @@ function rowToStore(row: Record<string, unknown>): SellerStore {
     },
     plan: (row.plan as PlanId) || undefined,
     trialEndsAt: (row.trial_ends_at as string) || undefined,
+    customOrdersEnabled: (row.custom_orders_enabled as boolean) ?? false,
+    servicesEnabled: (row.services_enabled as boolean) ?? false,
   };
 }
 
@@ -63,6 +65,8 @@ function storeToRow(store: SellerStore): Record<string, unknown> {
     returns_policy_text: store.returnsPolicy?.policyText || null,
     plan: store.plan || null,
     trial_ends_at: store.trialEndsAt || null,
+    custom_orders_enabled: store.customOrdersEnabled ?? false,
+    services_enabled: store.servicesEnabled ?? false,
   };
 }
 
@@ -161,6 +165,10 @@ export async function updateStore(
   if (patch.onboardingDismissed !== undefined) rowPatch.onboarding_dismissed = patch.onboardingDismissed;
   if (patch.plan !== undefined) rowPatch.plan = patch.plan || null;
   if (patch.trialEndsAt !== undefined) rowPatch.trial_ends_at = patch.trialEndsAt || null;
+  if (patch.customOrdersEnabled !== undefined)
+    rowPatch.custom_orders_enabled = patch.customOrdersEnabled;
+  if (patch.servicesEnabled !== undefined)
+    rowPatch.services_enabled = patch.servicesEnabled;
   if (patch.returnsPolicy !== undefined) {
     rowPatch.returns_enabled = patch.returnsPolicy?.enabled ?? false;
     rowPatch.returns_window_days = patch.returnsPolicy?.windowDays ?? 7;

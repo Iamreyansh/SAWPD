@@ -8,7 +8,11 @@ import { Pagination } from "@/components/ui/pagination";
 import { formatINR, timeAgo } from "@/lib/utils";
 import type { OrderStatus } from "@/types/seller";
 
-export const metadata = { title: "Dashboard · Orders" };
+export const metadata = {
+  title: "Dashboard · Orders",
+  description: "Manage orders: verify, ship, complete, cancel.",
+  robots: { index: false, follow: false },
+};
 export const dynamic = "force-dynamic";
 
 const TABS: { id: OrderStatus | "all"; label: string }[] = [

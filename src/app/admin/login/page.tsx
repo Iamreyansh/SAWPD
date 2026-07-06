@@ -3,7 +3,11 @@ import { isAdmin } from "@/lib/admin-auth";
 import { LoginForm } from "./login-form";
 import { Logo } from "@/components/ui/logo";
 
-export const metadata = { title: "Admin · Login" };
+export const metadata = {
+  title: "Admin · Login",
+  description: "Admin login.",
+  robots: { index: false, follow: false },
+};
 
 export default async function AdminLoginPage() {
   if (await isAdmin()) redirect("/admin");

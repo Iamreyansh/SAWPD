@@ -5,6 +5,8 @@ export type ProductImage = {
 
 export type ProductStatus = "live" | "draft" | "scheduled" | "archived";
 
+export type ProductKind = "product" | "service";
+
 export type Product = {
   id: string;
   slug: string;
@@ -18,6 +20,12 @@ export type Product = {
   tags?: string[];
   status?: ProductStatus;
   scheduledFor?: string;
+  /** "product" (default) is a physical SKU; "service" is bookable. */
+  kind?: ProductKind;
+  /** Only meaningful for kind === "service". Length of the booking in minutes. */
+  durationMinutes?: number;
+  /** Optional location/address for in-person services. */
+  location?: string;
 };
 
 export const MAX_PRODUCT_IMAGES = 6;

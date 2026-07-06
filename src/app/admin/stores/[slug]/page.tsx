@@ -10,7 +10,7 @@ import { getApplicationByEmail } from "@/lib/applications";
 import { getTrialState } from "@/lib/trial";
 import { OrderStatusBadge } from "@/components/dashboard/order-status-badge";
 import { StoreControls } from "./store-controls";
-import { formatINR, timeAgo } from "@/lib/utils";
+import { formatINR, timeAgo, LOW_STOCK_THRESHOLD } from "@/lib/utils";
 
 export async function generateMetadata({
   params,
@@ -50,7 +50,7 @@ export default async function AdminStoreDetailPage({
 
   const pendingVerification = statusCounts.awaiting_verification;
   const lowStock = products.filter(
-    (p) => p.isAvailable && p.stockCount > 0 && p.stockCount <= 5
+    (p) => p.isAvailable && p.stockCount > 0 && p.stockCount <= LOW_STOCK_THRESHOLD
   );
   const soldOut = products.filter((p) => p.stockCount === 0).length;
 

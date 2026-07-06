@@ -1,11 +1,13 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { Sparkles, ArrowRight } from "lucide-react";
 import { getStore } from "@/lib/store";
 import { listLiveProductsForStore } from "@/lib/products";
 import { isStoreOpen } from "@/lib/trial";
 import { listStoreSlugs } from "@/lib/stores";
 import { getStoreFooterStats } from "@/lib/orders";
+import { listSlotsForStore } from "@/lib/service-slots";
 import { Hero } from "@/components/storefront/hero";
 import { StorefrontHeader } from "@/components/storefront/header";
 import { ProductGrid } from "@/components/storefront/product-grid";
@@ -15,6 +17,7 @@ import { CartSheet } from "@/components/storefront/cart-sheet";
 import { ProductDetailSheet } from "@/components/storefront/product-detail-sheet";
 import type { Product } from "@/types/storefront";
 import type { SellerStore } from "@/types/seller";
+import { buildInstagramUrl } from "@/lib/utils";
 
 type Params = { slug: string };
 
@@ -50,6 +53,19 @@ export default async function StorefrontPage({
   const isOpen = isStoreOpen(store);
   const stats = await getStoreFooterStats(slug);
 
+  // Pre-load service slots for any service products so the detail
+  // sheet can render the slot picker without an extra fetch.
+  const serviceProducts = products.filter((p) => p.kind === "service");
+  const serviceSlots: Record<string, Awaited<ReturnType<typeof listSlotsForStore>>> = {};
+  if (serviceProducts.length > 0) {
+    const allSlots = await listSlotsForStore(slug, {
+      from: new Date(),
+    });
+    for (const slot of allSlots) {
+      (serviceSlots[slot.productId] ??= []).push(slot);
+    }
+  }
+
   if (!isOpen) {
     return (
       <div className="flex min-h-screen flex-col">
@@ -66,15 +82,19 @@ export default async function StorefrontPage({
               This shop is temporarily closed. The seller is renewing their plan
               or making updates.
             </p>
-            <Link
-              href={`https://instagram.com/${store.ownerHandle.replace("@", "")}`}
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3 text-[14px] font-semibold text-bone transition-colors hover:bg-ink/90"
-            >
-              DM on Instagram
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-              </svg>
-            </Link>
+            {buildInstagramUrl(store.ownerHandle) && (
+              <Link
+                href={buildInstagramUrl(store.ownerHandle)!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-6 inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3 text-[14px] font-semibold text-bone transition-colors hover:bg-ink/90"
+              >
+                DM on Instagram
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                </svg>
+              </Link>
+            )}
           </div>
         </main>
         <StorefrontFooter store={store} stats={stats} />
@@ -92,6 +112,27 @@ export default async function StorefrontPage({
           imageUrl={store.heroImage}
           imageAlt={store.name}
         />
+        {store.customOrdersEnabled && (
+          <div className="container-editorial">
+            <Link
+              href={`/s/${store.slug}/custom`}
+              className="mt-8 mb-2 flex items-center justify-between gap-3 rounded-2xl border border-vermillion/15 bg-vermillion/[0.04] px-5 py-4 transition-colors hover:bg-vermillion/[0.08]"
+            >
+              <div className="flex items-center gap-3">
+                <Sparkles className="h-4 w-4 text-vermillion" />
+                <div>
+                  <p className="text-[13.5px] font-semibold text-ink">
+                    Custom orders open
+                  </p>
+                  <p className="text-[11.5px] text-ink/55">
+                    Need something special? Place a custom request.
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="h-4 w-4 text-vermillion" />
+            </Link>
+          </div>
+        )}
         {products.length === 0 ? (
           <EmptyStorefront store={store} />
         ) : (
@@ -102,7 +143,7 @@ export default async function StorefrontPage({
       </main>
       <StorefrontFooter store={store} stats={stats} />
       <CartSheet products={products} storeSlug={store.slug} />
-      <ProductDetailSheet products={products} />
+      <ProductDetailSheet products={products} serviceSlots={serviceSlots} />
     </div>
   );
 }

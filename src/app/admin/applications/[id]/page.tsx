@@ -4,7 +4,7 @@ import { isAdmin } from "@/lib/admin-auth";
 import { getApplication } from "@/lib/applications";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { DecisionPanel } from "./decision-panel";
-import { formatINR } from "@/lib/utils";
+import { formatINR, buildInstagramUrl } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -33,14 +33,22 @@ export default async function ApplicationDetailPage({
         </div>
         <p className="mt-2 text-[14px] text-ink/60">
           {app.fullName} ·{" "}
-          <a
-            href={`https://instagram.com/${app.instagramHandle}`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-ink underline underline-offset-4 hover:text-vermillion"
-          >
-            @{app.instagramHandle}
-          </a>{" "}
+          {(() => {
+            const ig = buildInstagramUrl(app.instagramHandle);
+            if (!ig) {
+              return <span>@{app.instagramHandle}</span>;
+            }
+            return (
+              <a
+                href={ig}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-ink underline underline-offset-4 hover:text-vermillion"
+              >
+                @{app.instagramHandle}
+              </a>
+            );
+          })()}{" "}
           · {app.email}
         </p>
       </div>

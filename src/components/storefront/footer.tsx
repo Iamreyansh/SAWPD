@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { TrendingUp } from "lucide-react";
 import type { Store } from "@/types/storefront";
+import { buildInstagramUrl } from "@/lib/utils";
 
 export type StoreStats = {
   weekCount: number;
@@ -52,12 +53,19 @@ export function StorefrontFooter({
               Run by {store.name} · Powered by SAWPD
             </p>
           </div>
-          <a
-            href={`https://instagram.com/${store.ownerHandle.replace("@", "")}`}
-            className="text-[15px] font-semibold text-vermillion underline underline-offset-4 transition-opacity hover:opacity-70"
-          >
-            Follow on Instagram →
-          </a>
+          {(() => {
+            const ig = buildInstagramUrl(store.ownerHandle);
+            return ig ? (
+              <a
+                href={ig}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[15px] font-semibold text-vermillion underline underline-offset-4 transition-opacity hover:opacity-70"
+              >
+                Follow on Instagram →
+              </a>
+            ) : null;
+          })()}
         </motion.div>
         <div className="mt-12 flex flex-col gap-2 text-[12px] text-ink/40 sm:flex-row sm:justify-between">
           <p>© {new Date().getFullYear()} {store.name}. All rights reserved.</p>

@@ -8,17 +8,35 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Copy, Upload, X, Tag, Loader2, MessageCircle } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Upload,
+  X,
+  Tag,
+  Loader2,
+  MessageCircle,
+  Phone,
+  ShieldCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCartStore } from "@/store/cart-store";
 import { useHasMounted } from "@/hooks/use-has-mounted";
-import { formatINR, cn } from "@/lib/utils";
+import { formatINR, cn, buildInstagramUrl } from "@/lib/utils";
 import { buildWhatsAppLink, ownerContactMessage } from "@/lib/whatsapp";
 import { loadLastOrderAddress, saveLastOrderAddress } from "@/lib/address-memory";
+import { fireClientEvent, makeEvent } from "@/lib/pixels";
+import { listPaymentApps, buildUniversalUpiLink } from "@/lib/payment-links";
 import type { Product, Store } from "@/types/storefront";
 import { placeOrder, validatePromoAction } from "./actions";
+import {
+  requestCheckoutOtpAction,
+  verifyCheckoutOtpAction,
+  devPeekOtpCodeAction,
+} from "./otp-actions";
+import { confirmPaymentAction } from "./confirm-actions";
 
 type Props = {
   store: Store;
@@ -37,14 +55,24 @@ const customerSchema = z.object({
 
 type CustomerForm = z.infer<typeof customerSchema>;
 
+type OtpStage = "idle" | "sending" | "sent" | "verifying" | "verified";
+
 export function CheckoutClient({ store, products }: Props) {
   const items = useCartStore((s) => s.items);
   const clear = useCartStore((s) => s.clear);
   const hydrated = useCartStore((s) => s.hydrated);
   const mounted = useHasMounted();
 
-  const [screenshot, setScreenshot] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState<{ orderId: string } | null>(null);
+  const [submitted, setSubmitted] = useState<
+    {
+      orderId: string;
+      eventId: string;
+      total: number;
+      numItems: number;
+      productIds: string[];
+      phoneVerified: boolean;
+    } | null
+  >(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -59,6 +87,13 @@ export function CheckoutClient({ store, products }: Props) {
   const [promoPending, startPromoTransition] = useTransition();
   const submittingRef = useRef(false);
 
+  // OTP gate
+  const [otpStage, setOtpStage] = useState<OtpStage>("idle");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [otpDevCode, setOtpDevCode] = useState<string | null>(null);
+  const [otpProviderId, setOtpProviderId] = useState<string>("console");
+
   const lines = useMemo(
     () =>
       (mounted && hydrated ? items : [])
@@ -66,14 +101,45 @@ export function CheckoutClient({ store, products }: Props) {
           const product = products.find((p) => p.id === i.productId);
           return product ? { ...i, product } : null;
         })
-        .filter(Boolean) as Array<{ productId: string; qty: number; product: Product }>,
-    [items, products, mounted, hydrated]
+        .filter(
+          (
+            x,
+          ): x is {
+            productId: string;
+            qty: number;
+            slotId?: string;
+            slotStartsAt?: string;
+            slotEndsAt?: string;
+            product: Product;
+          } => x !== null,
+        ),
+    [items, products, mounted, hydrated],
   );
 
   const subtotal = lines.reduce((acc, l) => acc + l.product.price * l.qty, 0);
   const itemCount = lines.reduce((acc, l) => acc + l.qty, 0);
   const discountAmount = appliedPromo?.discountAmount ?? 0;
   const finalTotal = Math.max(0, subtotal - discountAmount);
+
+  // InitiateCheckout event (deduped)
+  const checkoutEventFiredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!mounted || !hydrated) return;
+    if (lines.length === 0) return;
+    const key = lines
+      .map((l) => `${l.productId}x${l.qty}`)
+      .sort()
+      .join(",");
+    if (checkoutEventFiredRef.current === key) return;
+    checkoutEventFiredRef.current = key;
+    fireClientEvent(
+      makeEvent("InitiateCheckout", {
+        value: finalTotal,
+        numItems: itemCount,
+        contentIds: lines.map((l) => l.productId),
+      }),
+    );
+  }, [mounted, hydrated, lines, finalTotal, itemCount]);
 
   const upiLink = useMemo(() => {
     const params = new URLSearchParams({
@@ -109,6 +175,7 @@ export function CheckoutClient({ store, products }: Props) {
     register,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<CustomerForm>({
     resolver: zodResolver(customerSchema),
@@ -124,6 +191,8 @@ export function CheckoutClient({ store, products }: Props) {
     setValue("email", saved.email ?? "");
     setValue("address", saved.address);
   }, [setValue]);
+
+  const watchedPhone = watch("phone");
 
   const onSubmit = (data: CustomerForm) => {
     setError(null);
@@ -148,10 +217,16 @@ export function CheckoutClient({ store, products }: Props) {
           price: l.product.price,
           qty: l.qty,
           imageUrl: l.product.images[0]?.url ?? "",
+          kind: l.product.kind ?? "product",
+          slotId: l.slotId,
+          slotStartsAt: l.slotStartsAt,
+          slotEndsAt: l.slotEndsAt,
         })),
         subtotal,
         promoCode: appliedPromo?.code,
-        screenshotDataUrl: screenshot ?? undefined,
+        // Phone-verified customers skip the screenshot requirement;
+        // the order goes straight to the seller as verified.
+        phoneVerified: otpStage === "verified",
       });
       if (result.ok) {
         saveLastOrderAddress({
@@ -160,10 +235,24 @@ export function CheckoutClient({ store, products }: Props) {
           email: data.email?.trim() || undefined,
           address: data.address.trim(),
         });
-        // Replace checkout in history so browser-back goes to the shop
-        // instead of an empty checkout page.
         window.history.replaceState(null, "", `/s/${store.slug}`);
-        setSubmitted({ orderId: result.orderId });
+        setSubmitted({
+          orderId: result.orderId,
+          eventId: result.eventId,
+          total: finalTotal,
+          numItems: itemCount,
+          productIds: lines.map((l) => l.productId),
+          phoneVerified: otpStage === "verified",
+        });
+        fireClientEvent(
+          makeEvent("Purchase", {
+            eventId: result.eventId,
+            orderId: result.orderId,
+            value: finalTotal,
+            numItems: itemCount,
+            contentIds: lines.map((l) => l.productId),
+          }),
+        );
         clear();
       } else {
         setError(result.error);
@@ -196,13 +285,64 @@ export function CheckoutClient({ store, products }: Props) {
     setPromoError(null);
   };
 
-  const handleScreenshot = (file: File | undefined) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") setScreenshot(reader.result);
-    };
-    reader.readAsDataURL(file);
+  // ── OTP actions ──────────────────────────────────────────────
+
+  const handleSendOtp = () => {
+    if (!watchedPhone || watchedPhone.replace(/\D/g, "").length < 10) {
+      setOtpError("Enter a valid 10-digit phone number first.");
+      return;
+    }
+    setOtpError(null);
+    setOtpStage("sending");
+    setOtpDevCode(null);
+    startTransition(async () => {
+      const result = await requestCheckoutOtpAction({ phone: watchedPhone });
+      if (result.ok) {
+        setOtpStage("sent");
+        setOtpProviderId(result.providerId);
+        if (result.devCode) setOtpDevCode(result.devCode);
+      } else {
+        setOtpStage("idle");
+        setOtpError(result.error);
+      }
+    });
+  };
+
+  const handleVerifyOtp = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!otpCode || otpCode.length !== 6) {
+      setOtpError("Enter the 6-digit code.");
+      return;
+    }
+    setOtpError(null);
+    setOtpStage("verifying");
+    startTransition(async () => {
+      const result = await verifyCheckoutOtpAction({
+        phone: watchedPhone,
+        code: otpCode,
+      });
+      if (result.ok) {
+        setOtpStage("verified");
+      } else {
+        setOtpStage("sent");
+        setOtpError(result.error);
+      }
+    });
+  };
+
+  const handleResendOtp = () => {
+    setOtpCode("");
+    setOtpDevCode(null);
+    handleSendOtp();
+  };
+
+  // In dev mode, allow prefilling the code by clicking the dev banner.
+  const handleUseDevCode = () => {
+    if (!otpDevCode) return;
+    startTransition(async () => {
+      const result = await devPeekOtpCodeAction(watchedPhone);
+      if (result.ok) setOtpCode(result.code);
+    });
   };
 
   const copyUpi = async () => {
@@ -214,6 +354,24 @@ export function CheckoutClient({ store, products }: Props) {
       /* noop */
     }
   };
+
+  // Payment deep links (GPay/PhonePe/Paytm/BHIM).
+  const paymentApps = listPaymentApps({
+    upiId: store.upiId,
+    payeeName: store.name,
+    amountInr: finalTotal,
+    orderId: "pending",
+    transactionNote: "SAWPD",
+  });
+  const universalUpi = buildUniversalUpiLink({
+    upiId: store.upiId,
+    payeeName: store.name,
+    amountInr: finalTotal,
+    orderId: "pending",
+    transactionNote: "SAWPD",
+  });
+
+  // ── Success view ─────────────────────────────────────────────
 
   if (submitted) {
     return (
@@ -233,9 +391,14 @@ export function CheckoutClient({ store, products }: Props) {
             <span className="font-semibold tabular-nums text-ink">
               {submitted.orderId}
             </span>{" "}
-            has been received. {store.name} will verify your payment and
-            confirm shipping on WhatsApp or Instagram DM.
+            has been received. {store.name} will confirm shipping on
+            WhatsApp or Instagram DM.
           </p>
+          {submitted.phoneVerified && (
+            <p className="mt-3 text-[12.5px] text-vermillion">
+              Verified via phone OTP — your order is auto-confirmed.
+            </p>
+          )}
           <p className="mt-3 text-[13px] text-ink/50">
             Save your order ID — use it to{" "}
             <Link
@@ -281,10 +444,8 @@ export function CheckoutClient({ store, products }: Props) {
                     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
                       navigator.vibrate(10);
                     }
-                    window.open(
-                      `https://instagram.com/${store.ownerHandle.replace("@", "")}`,
-                      "_blank"
-                    );
+                    const ig = buildInstagramUrl(store.ownerHandle);
+                    if (ig) window.open(ig, "_blank", "noopener,noreferrer");
                   }}
                 >
                   DM on Instagram
@@ -327,13 +488,21 @@ export function CheckoutClient({ store, products }: Props) {
 
       <div className="grid grid-cols-1 gap-12 md:grid-cols-12 md:gap-10">
         <div className="md:col-span-7">
-          <p className="eyebrow mb-3">Step 1 of 2</p>
+          <p className="eyebrow mb-3">Checkout</p>
           <h1 className="display-l text-ink text-balance">
             Pay via UPI
           </h1>
           <p className="mt-4 max-w-md text-[14.5px] text-ink/60">
-            Scan the QR with any UPI app, or copy the UPI ID. Then add your
-            details and upload a screenshot of the payment.
+            Scan the QR with any UPI app, or pick your preferred app below.
+            {otpStage === "verified" ? (
+              <span className="block mt-1 text-vermillion">
+                Phone verified — your order is auto-confirmed after payment.
+              </span>
+            ) : (
+              <span className="block mt-1">
+                Verify your phone first for instant confirmation.
+              </span>
+            )}
           </p>
 
           <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-[200px_1fr] sm:items-start">
@@ -394,10 +563,36 @@ export function CheckoutClient({ store, products }: Props) {
             </div>
           </div>
 
+          {/* Pay-with app picker */}
+          <div className="mt-8">
+            <p className="eyebrow-ink mb-3">Pay with</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {paymentApps.map((app) => (
+                <a
+                  key={app.id}
+                  href={app.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-14 items-center justify-center rounded-xl border border-ink/10 bg-white text-[12.5px] font-semibold text-ink transition-all hover:border-vermillion hover:text-vermillion active:scale-[0.98]"
+                >
+                  {app.label}
+                </a>
+              ))}
+            </div>
+            <a
+              href={universalUpi}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 block text-center text-[12px] text-ink/55 underline-offset-2 hover:text-ink hover:underline"
+            >
+              Or open any UPI app
+            </a>
+          </div>
+
           <hr className="my-12 border-ink/10" />
 
-          <p className="eyebrow mb-3">Step 2 of 2</p>
-          <h2 className="display-m text-ink text-balance">Your details</h2>
+          <p className="eyebrow mb-3">Your details</p>
+          <h2 className="display-m text-ink text-balance">Where should we ship?</h2>
 
           <form
             id="checkout-form"
@@ -412,7 +607,11 @@ export function CheckoutClient({ store, products }: Props) {
                   autoComplete="name"
                 />
               </Field>
-              <Field label="Phone" error={errors.phone?.message}>
+              <Field
+                label="Phone"
+                error={errors.phone?.message}
+                hint="We'll text a verification code here."
+              >
                 <Input
                   {...register("phone")}
                   placeholder="10-digit number"
@@ -421,6 +620,107 @@ export function CheckoutClient({ store, products }: Props) {
                 />
               </Field>
             </div>
+
+            {/* Phone OTP verification */}
+            <div className="rounded-2xl border border-ink/10 bg-bone p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <ShieldCheck
+                  className={cn(
+                    "h-4 w-4",
+                    otpStage === "verified"
+                      ? "text-vermillion"
+                      : "text-ink/45",
+                  )}
+                />
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/60">
+                  Phone verification
+                </p>
+              </div>
+
+              {otpStage === "idle" && (
+                <Button
+                  type="button"
+                  onClick={handleSendOtp}
+                  disabled={otpStage !== "idle"}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <Phone className="h-3.5 w-3.5" />
+                  Send verification code
+                </Button>
+              )}
+
+              {otpStage === "sending" && (
+                <Button type="button" variant="outline" disabled className="w-full">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Sending code…
+                </Button>
+              )}
+
+              {(otpStage === "sent" || otpStage === "verifying") && (
+                <form onSubmit={handleVerifyOtp} className="space-y-2">
+                  <p className="text-[12.5px] text-ink/60">
+                    Code sent to {watchedPhone}.
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      value={otpCode}
+                      onChange={(e) =>
+                        setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                      }
+                      placeholder="6-digit code"
+                      className="text-center font-mono text-[16px] tracking-[0.4em]"
+                      disabled={otpStage === "verifying"}
+                      autoFocus
+                    />
+                    <Button
+                      type="submit"
+                      variant="vermillion"
+                      disabled={otpStage === "verifying" || otpCode.length !== 6}
+                    >
+                      {otpStage === "verifying" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Verify"
+                      )}
+                    </Button>
+                  </div>
+                  {otpDevCode && (
+                    <button
+                      type="button"
+                      onClick={handleUseDevCode}
+                      className="text-[11px] text-vermillion underline-offset-2 hover:underline"
+                    >
+                      Dev: use code {otpDevCode}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={otpStage === "verifying"}
+                    className="block text-[11.5px] text-ink/55 hover:text-ink"
+                  >
+                    Send a new code
+                  </button>
+                </form>
+              )}
+
+              {otpStage === "verified" && (
+                <div className="flex items-center gap-2 text-[13px] text-vermillion">
+                  <Check className="h-4 w-4" strokeWidth={2.5} />
+                  <span>Phone verified · {otpProviderId}</span>
+                </div>
+              )}
+
+              {otpError && (
+                <p className="mt-2 text-[12px] text-vermillion">{otpError}</p>
+              )}
+            </div>
+
             <Field label="Email (optional)" error={errors.email?.message}>
               <Input
                 {...register("email")}
@@ -429,45 +729,14 @@ export function CheckoutClient({ store, products }: Props) {
                 autoComplete="email"
               />
             </Field>
-            <Field label="Shipping address" error={errors.address?.message}>
+            <Field
+              label="Shipping address"
+              error={errors.address?.message}
+            >
               <Textarea
                 {...register("address")}
                 placeholder="House, street, city, pincode"
               />
-            </Field>
-
-            <Field label="Payment screenshot">
-              {screenshot ? (
-                <div className="relative h-40 w-full max-w-[200px] overflow-hidden rounded-xl border border-ink/10">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={screenshot}
-                    alt="Payment screenshot preview"
-                    className="h-full w-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setScreenshot(null)}
-                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-ink/80 text-bone"
-                    aria-label="Remove screenshot"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <label className="flex h-32 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-ink/20 bg-bone text-ink/50 transition-colors hover:border-ink/40 hover:text-ink">
-                  <Upload className="h-5 w-5" strokeWidth={1.75} />
-                  <span className="text-[12.5px] font-medium">
-                    Tap to upload
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={(e) => handleScreenshot(e.target.files?.[0])}
-                  />
-                </label>
-              )}
             </Field>
 
             {error && (
@@ -511,9 +780,7 @@ export function CheckoutClient({ store, products }: Props) {
                           {formatINR(line.product.price * line.qty)}
                         </p>
                       </div>
-                      <p className="text-[12px] text-ink/50">
-                        Qty {line.qty}
-                      </p>
+                      <p className="text-[12px] text-ink/50">Qty {line.qty}</p>
                     </div>
                   </motion.li>
                 ))}
@@ -595,7 +862,9 @@ export function CheckoutClient({ store, products }: Props) {
               {discountAmount > 0 && (
                 <div className="flex justify-between text-vermillion">
                   <dt>Discount</dt>
-                  <dd className="tabular-nums">−{formatINR(discountAmount)}</dd>
+                  <dd className="tabular-nums">
+                    −{formatINR(discountAmount)}
+                  </dd>
                 </div>
               )}
               <div className="flex justify-between">
@@ -609,7 +878,7 @@ export function CheckoutClient({ store, products }: Props) {
               <span
                 className={cn(
                   "text-2xl font-bold tabular-nums tracking-[-0.02em] text-ink",
-                  discountAmount > 0 && "text-vermillion"
+                  discountAmount > 0 && "text-vermillion",
                 )}
               >
                 {formatINR(finalTotal)}
@@ -628,7 +897,9 @@ export function CheckoutClient({ store, products }: Props) {
             </Button>
 
             <p className="mt-3 text-center text-[11px] text-ink/40">
-              No payment is taken on this page. Owner verifies your screenshot.
+              {otpStage === "verified"
+                ? "Phone-verified · order auto-confirmed."
+                : "Verify phone to auto-confirm your order, or the seller will confirm manually."}
             </p>
           </div>
         </aside>
@@ -640,10 +911,12 @@ export function CheckoutClient({ store, products }: Props) {
 function Field({
   label,
   error,
+  hint,
   children,
 }: {
   label: string;
   error?: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -652,6 +925,9 @@ function Field({
         {label}
       </span>
       {children}
+      {hint && !error && (
+        <span className="mt-1.5 block text-[11.5px] text-ink/45">{hint}</span>
+      )}
       {error && (
         <span className="mt-1.5 block text-[12px] text-vermillion">
           {error}

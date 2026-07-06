@@ -23,7 +23,7 @@ export async function generateMetadata({
   const store = await getStore(slug);
   if (!store) return { title: "Checkout" };
   return {
-    title: `Checkout · ${store.name} — SAWPD`,
+    title: `Checkout · ${store.name}`,
     description: `Complete your order and pay via UPI. UPI payments land directly in ${store.name}'s account.`,
   };
 }

@@ -4,7 +4,11 @@ import { ArrowUpRight } from "lucide-react";
 import { isAdmin } from "@/lib/admin-auth";
 import { listStoreSummaries } from "@/lib/stores";
 
-export const metadata = { title: "Admin · Stores" };
+export const metadata = {
+  title: "Admin · Stores",
+  description: "Admin: all stores, plans, and order counts.",
+  robots: { index: false, follow: false },
+};
 export const dynamic = "force-dynamic";
 
 export default async function AdminStoresPage() {

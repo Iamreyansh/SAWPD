@@ -29,3 +29,26 @@ export function timeAgo(iso: string): string {
 }
 
 export const LOW_STOCK_THRESHOLD = 5;
+
+// Valid Instagram usernames: 1-30 chars, letters/digits/underscore/dot.
+// No leading dot, no consecutive dots, no trailing dot. Conservative.
+const INSTAGRAM_HANDLE_RE = /^(?!.*\.\.)(?!.*\.$)[A-Za-z0-9._]{1,30}$/;
+
+/**
+ * Build a safe `https://instagram.com/<handle>` URL from a raw handle.
+ * Strips a leading `@`, validates the remaining string, and percent-encodes
+ * any characters that don't match the platform's handle charset. Returns
+ * `null` if the handle is empty or unsafe — callers should fall back to a
+ * disabled label rather than a broken link.
+ */
+export function buildInstagramUrl(handle: string | null | undefined): string | null {
+  if (!handle) return null;
+  const cleaned = handle.trim().replace(/^@+/, "").replace(/\s+/g, "");
+  if (!cleaned) return null;
+  if (!INSTAGRAM_HANDLE_RE.test(cleaned)) {
+    // Try a softer fallback: percent-encode the whole thing. Better a
+    // URL that 404s on Instagram than a broken href or an open-redirect.
+    return `https://instagram.com/${encodeURIComponent(cleaned)}`;
+  }
+  return `https://instagram.com/${cleaned}`;
+}

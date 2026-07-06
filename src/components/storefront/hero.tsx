@@ -12,6 +12,15 @@ type HeroProps = {
   imageAlt: string;
 };
 
+// CSS url() injection guard — strip characters that could break out of
+// the url("…") wrapper. Any URL the seller enters here should already
+// be a valid https URL (the settings form validates with z.url()), but
+// we sanitize defensively in case bad data slips through.
+function safeCssUrl(url: string): string {
+  if (!url) return "";
+  return url.replace(/["\\()\n\r]/g, "");
+}
+
 export function Hero({ kicker, headline, sub, imageUrl, imageAlt }: HeroProps) {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
@@ -23,6 +32,7 @@ export function Hero({ kicker, headline, sub, imageUrl, imageAlt }: HeroProps) {
   const textY = useTransform(scrollYProgress, [0, 1], ["0%", "-8%"]);
 
   const lineEase = [0.22, 1, 0.36, 1] as const;
+  const safeBgUrl = safeCssUrl(imageUrl);
 
   return (
     <section
@@ -44,7 +54,8 @@ export function Hero({ kicker, headline, sub, imageUrl, imageAlt }: HeroProps) {
               animate={{ scale: 1.06 }}
               transition={{ duration: 12, ease: "easeInOut", repeat: Infinity, repeatType: "reverse" }}
               className="absolute inset-0"
-              style={{ backgroundImage: `url(${imageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }}
+              style={{ backgroundImage: `url(${safeBgUrl})`, backgroundSize: "cover", backgroundPosition: "center" }}
+              aria-hidden="true"
             />
           </motion.div>
         </div>

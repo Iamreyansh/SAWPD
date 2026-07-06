@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/ui/logo";
 
 export const metadata = {
-  title: "Privacy Policy — SAWPD",
+  title: "Privacy Policy",
   description: "How SAWPD collects, uses, and protects your personal information.",
 };
 

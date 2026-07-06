@@ -10,6 +10,7 @@ export const metadata = {
   title: "Dashboard · Returns",
   description:
     "Review and decide on customer return requests. Approve, reject, or refund.",
+  robots: { index: false, follow: false },
 };
 export const dynamic = "force-dynamic";
 

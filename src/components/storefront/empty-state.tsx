@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import type { Store } from "@/types/storefront";
+import { buildInstagramUrl } from "@/lib/utils";
 
 export function EmptyStorefront({ store }: { store: Store }) {
+  const igUrl = buildInstagramUrl(store.ownerHandle);
   return (
     <section className="container-editorial flex min-h-[60vh] flex-col items-start justify-center py-20">
       <motion.p
@@ -35,19 +37,23 @@ export function EmptyStorefront({ store }: { store: Store }) {
         <span className="font-semibold text-ink">{store.ownerHandle}</span> to
         order directly — they read every message.
       </motion.p>
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.6 }}
-        className="mt-10"
-      >
-        <Link
-          href={`https://instagram.com/${store.ownerHandle.replace("@", "")}`}
-          className="inline-flex items-center gap-2 text-[15px] font-semibold text-vermillion underline underline-offset-4 transition-opacity hover:opacity-70"
+      {igUrl && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.6 }}
+          className="mt-10"
         >
-          DM on Instagram →
-        </Link>
-      </motion.div>
+          <Link
+            href={igUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-[15px] font-semibold text-vermillion underline underline-offset-4 transition-opacity hover:opacity-70"
+          >
+            DM on Instagram →
+          </Link>
+        </motion.div>
+      )}
     </section>
   );
 }

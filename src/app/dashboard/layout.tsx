@@ -56,6 +56,8 @@ export default async function DashboardLayout({
         name: s.name,
         active: s.slug === activeStore.slug,
       }))}
+      customOrdersEnabled={activeStore.customOrdersEnabled ?? false}
+      servicesEnabled={activeStore.servicesEnabled ?? false}
     >
       {children}
     </DashboardShell>

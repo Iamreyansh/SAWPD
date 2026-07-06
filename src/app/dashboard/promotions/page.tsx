@@ -6,6 +6,7 @@ import { PromotionsClient } from "@/components/dashboard/promotions-client";
 export const metadata = {
   title: "Dashboard · Promotions",
   description: "Create and manage discount codes for your shop.",
+  robots: { index: false, follow: false },
 };
 export const dynamic = "force-dynamic";
 

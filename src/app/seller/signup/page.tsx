@@ -5,7 +5,7 @@ import { SignupForm } from "./signup-form";
 import { Logo } from "@/components/ui/logo";
 
 export const metadata = {
-  title: "Create your seller account — SAWPD",
+  title: "Create your seller account",
   description:
     "Sign up to open a shop on SAWPD. We'll guide you through the application.",
 };

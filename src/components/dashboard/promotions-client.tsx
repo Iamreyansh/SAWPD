@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Tag, Calendar, Users } from "lucide-react";
 import {
   Sheet,
@@ -28,6 +29,7 @@ type Props = {
 type Filter = "all" | "active" | "paused" | "expired" | "scheduled" | "exhausted";
 
 export function PromotionsClient({ storeSlug, promos }: Props) {
+  const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
@@ -43,7 +45,12 @@ export function PromotionsClient({ storeSlug, promos }: Props) {
 
   const onDelete = async (id: string, code: string) => {
     if (!confirm(`Delete promo "${code}"? Orders that already used it will keep showing it.`)) return;
-    await deletePromoAction(storeSlug, id);
+    const result = await deletePromoAction(storeSlug, id);
+    if (!result.ok) {
+      alert(`Couldn't delete "${code}": ${result.error}`);
+      return;
+    }
+    router.refresh();
   };
 
   const counts = countByState(promos);

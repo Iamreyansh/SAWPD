@@ -6,7 +6,11 @@ import { StatusBadge } from "@/components/admin/status-badge";
 import { readRecentAudit, describeAuditEvent } from "@/lib/audit";
 import { formatINR, timeAgo } from "@/lib/utils";
 
-export const metadata = { title: "Admin · Overview" };
+export const metadata = {
+  title: "Admin · Overview",
+  description: "Admin overview: applications, trials, recent activity.",
+  robots: { index: false, follow: false },
+};
 
 export const dynamic = "force-dynamic";
 

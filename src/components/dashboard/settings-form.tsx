@@ -28,6 +28,7 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 export function SettingsForm({ store }: { store: SellerStore }) {
+  const { slug: storeSlug } = store;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +69,7 @@ export function SettingsForm({ store }: { store: SellerStore }) {
     setError(null);
     const formData = new FormData();
     formData.append("file", file);
-    const result = await uploadHeroImageAction(formData);
+    const result = await uploadHeroImageAction(storeSlug, formData);
     setUploading(false);
     if (result.ok) {
       setValue("heroImage", result.url, { shouldValidate: true });
@@ -85,7 +86,7 @@ export function SettingsForm({ store }: { store: SellerStore }) {
     setError(null);
     const formData = new FormData();
     formData.append("file", file);
-    const result = await uploadHeroImageAction(formData);
+    const result = await uploadHeroImageAction(storeSlug, formData);
     setUploadingQr(false);
     if (result.ok) {
       setValue("upiQrImage", result.url, { shouldValidate: true });

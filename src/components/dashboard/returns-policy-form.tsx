@@ -120,7 +120,13 @@ export function ReturnsPolicyForm({ storeSlug, policy }: Props) {
               min={1}
               max={60}
               value={windowDays}
-              onChange={(e) => setWindowDays(parseInt(e.target.value || "7", 10))}
+              onChange={(e) => {
+                const raw = parseInt(e.target.value, 10);
+                const safe = Number.isFinite(raw)
+                  ? Math.max(1, Math.min(60, raw))
+                  : 7;
+                setWindowDays(safe);
+              }}
               className="h-9 w-20 text-center text-[12px]"
               aria-label="Custom window"
             />

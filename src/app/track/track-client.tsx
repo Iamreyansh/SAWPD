@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, Package, Check, Truck, MapPin, MessageCircle, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatINR, cn } from "@/lib/utils";
+import { formatINR, cn, buildInstagramUrl } from "@/lib/utils";
 import { buildWhatsAppLink, ownerContactMessage } from "@/lib/whatsapp";
 import { trackOrderAction, type TrackResult } from "./actions";
 import { TrackReturnsCard } from "./track-returns-card";
@@ -372,13 +372,19 @@ function OrderFound({
                   }
                 }}
               >
-                <a
-                  href={`https://instagram.com/${store.ownerHandle.replace("@", "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  DM on Instagram
-                </a>
+                {(() => {
+                  const ig = buildInstagramUrl(store.ownerHandle);
+                  if (!ig) return null;
+                  return (
+                    <a
+                      href={ig}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      DM on Instagram
+                    </a>
+                  );
+                })()}
               </Button>
             </motion.div>
           )}
