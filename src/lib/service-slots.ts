@@ -188,7 +188,7 @@ export async function listBookingsForStore(
   opts: { fromNow?: boolean } = {},
 ): Promise<(Booking & { productTitle?: string })[]> {
   const sb = createAdminClient();
-  let q = sb
+  const q = sb
     .from("service_bookings")
     .select("*, products:product_id(title)")
     .order("starts_at", { ascending: true });
@@ -209,9 +209,9 @@ export async function listBookingsForStore(
     (orders ?? []).map((o) => [o.id as string, o.store_slug as string]),
   );
 
-  let result = data
-    .filter((b) => orderStoreMap.get(b.order_id as string) === storeSlug)
-    .map((b) => {
+let result = data
+      .filter((b) => orderStoreMap.get(b.order_id as string) === storeSlug)
+      .map((b) => {
       const product = b.products as { title: string } | null;
       const row: Booking & { productTitle?: string } = {
         id: b.id as string,

@@ -125,9 +125,9 @@ function SideBySideHero({
   imageUrl: string;
   imageAlt: string;
   imageSide: "left" | "right";
-  imageY: any;
-  imageScale: any;
-  textY: any;
+  imageY: ReturnType<typeof useTransform<string | number, string>>;
+  imageScale: ReturnType<typeof useTransform<string | number, number>>;
+  textY: ReturnType<typeof useTransform<string | number, string>>;
   lineEase: readonly [number, number, number, number];
   safeBgUrl: string;
 }) {
@@ -274,9 +274,9 @@ function FullBleedHero({
   sub: string;
   imageUrl: string;
   imageAlt: string;
-  imageY: any;
-  imageScale: any;
-  textY: any;
+  imageY: ReturnType<typeof useTransform<string | number, string>>;
+  imageScale: ReturnType<typeof useTransform<string | number, number>>;
+  textY: ReturnType<typeof useTransform<string | number, string>>;
   lineEase: readonly [number, number, number, number];
 }) {
   return (

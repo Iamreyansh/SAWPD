@@ -143,7 +143,7 @@ export function ThemePicker({
                       color: t.preview.bg,
                     }}
                   >
-                    ✓
+                    {"✓"}
                   </div>
                 )}
               </div>

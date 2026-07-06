@@ -145,7 +145,7 @@ export default async function ServiceDetailPage({
           <h2 className="text-[14px] font-semibold text-ink">Slots</h2>
           <p className="text-[11.5px] text-ink/50">
             Blocked slots are hidden from customers but kept so existing
-            bookings aren't lost.
+            bookings aren&apos;t lost.
           </p>
         </div>
         {slots.length === 0 ? (
