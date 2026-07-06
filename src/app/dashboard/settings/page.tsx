@@ -5,6 +5,8 @@ import { SettingsForm } from "@/components/dashboard/settings-form";
 import { PlanPicker } from "@/components/dashboard/plan-picker";
 import { ReturnsPolicyForm } from "@/components/dashboard/returns-policy-form";
 import { FeatureToggles } from "@/components/dashboard/feature-toggles";
+import { ThemePicker } from "@/components/dashboard/theme-picker";
+import { isThemeId, DEFAULT_THEME } from "@/lib/themes";
 import { DEFAULT_RETURNS_POLICY } from "@/types/storefront";
 
 export const metadata = {
@@ -86,6 +88,17 @@ export default async function SettingsPage() {
       />
 
       <SettingsForm store={store} />
+
+      <div>
+        <p className="eyebrow mb-4 mt-12">Appearance</p>
+        <ThemePicker
+          storeSlug={store.slug}
+          currentThemeId={
+            isThemeId(store.themeId) ? store.themeId : DEFAULT_THEME
+          }
+          currentOverrides={store.themeOverrides ?? null}
+        />
+      </div>
 
       <ReturnsPolicyForm
         storeSlug={store.slug}

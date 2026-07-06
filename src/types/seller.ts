@@ -1,4 +1,7 @@
 import type { Product, Store } from "./storefront";
+import type { ThemeId, ThemeOverrides } from "@/lib/themes";
+
+export type { ThemeId, ThemeOverrides } from "@/lib/themes";
 
 export type OrderStatus =
   | "awaiting_payment"
@@ -79,6 +82,8 @@ export type SellerStore = Store & {
   trialEndsAt?: string;
   customOrdersEnabled?: boolean;
   servicesEnabled?: boolean;
+  themeId?: ThemeId;
+  themeOverrides?: ThemeOverrides;
 };
 
 export type DashboardStats = {

@@ -37,6 +37,12 @@ import {
   generateAvailability,
   listSlotsForStore,
 } from "@/lib/service-slots";
+import {
+  THEMES,
+  DEFAULT_THEME,
+  isThemeId,
+  type ThemeOverrides,
+} from "@/lib/themes";
 import { appendAudit } from "@/lib/audit";
 import { notifyOrderStatusChanged, notifyStoreEmail } from "@/lib/notify";
 
@@ -1157,5 +1163,60 @@ export async function deleteServiceSlotAction(
   }
   await deleteServiceSlot(slotId);
   revalidatePath("/dashboard/services");
+  return { ok: true };
+}
+
+// ─── Storefront theme ────────────────────────────────────────────
+
+const themeOverridesSchema = z.object({
+  primary: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Use a 6-digit hex like #FF4A1C")
+    .max(7)
+    .optional()
+    .or(z.literal("")),
+  fontFamily: z.string().max(120).optional().or(z.literal("")),
+});
+
+export type UpdateStoreThemeResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function updateStoreThemeAction(
+  storeSlug: string,
+  themeId: string,
+  overrides: unknown
+): Promise<UpdateStoreThemeResult> {
+  const store = await requireActiveStore();
+  if (store.slug !== storeSlug) {
+    return { ok: false, error: "Store not found." };
+  }
+  if (!isThemeId(themeId)) {
+    return { ok: false, error: "Unknown theme." };
+  }
+
+  const parsed = themeOverridesSchema.safeParse(overrides ?? {});
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid overrides.",
+    };
+  }
+
+  const clean: ThemeOverrides = {};
+  if (parsed.data.primary && parsed.data.primary.length > 0) {
+    clean.primary = parsed.data.primary;
+  }
+  if (parsed.data.fontFamily && parsed.data.fontFamily.length > 0) {
+    clean.fontFamily = parsed.data.fontFamily;
+  }
+
+  await updateStore(
+    storeSlug,
+    { themeId, themeOverrides: clean },
+    { asSellerId: store.sellerId },
+  );
+  revalidatePath("/dashboard/settings");
+  revalidatePath(`/s/${storeSlug}`);
   return { ok: true };
 }

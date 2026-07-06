@@ -13,6 +13,15 @@ function rowToStore(row: Record<string, unknown>): SellerStore {
       ? (() => { try { return JSON.parse(row.hero_headline); } catch { return []; } })()
       : [];
 
+  // theme_overrides is JSONB — Supabase returns it already parsed.
+  let themeOverrides: SellerStore["themeOverrides"];
+  const raw = row.theme_overrides;
+  if (raw && typeof raw === "object") {
+    themeOverrides = raw as SellerStore["themeOverrides"];
+  } else if (typeof raw === "string") {
+    try { themeOverrides = JSON.parse(raw); } catch { /* ignore */ }
+  }
+
   return {
     slug: row.slug as string,
     sellerId: row.seller_id as string,
@@ -39,6 +48,8 @@ function rowToStore(row: Record<string, unknown>): SellerStore {
     trialEndsAt: (row.trial_ends_at as string) || undefined,
     customOrdersEnabled: (row.custom_orders_enabled as boolean) ?? false,
     servicesEnabled: (row.services_enabled as boolean) ?? false,
+    themeId: (row.theme_id as SellerStore["themeId"]) ?? "editorial",
+    themeOverrides,
   };
 }
 
@@ -67,6 +78,8 @@ function storeToRow(store: SellerStore): Record<string, unknown> {
     trial_ends_at: store.trialEndsAt || null,
     custom_orders_enabled: store.customOrdersEnabled ?? false,
     services_enabled: store.servicesEnabled ?? false,
+    theme_id: store.themeId ?? "editorial",
+    theme_overrides: store.themeOverrides ?? {},
   };
 }
 
@@ -169,6 +182,10 @@ export async function updateStore(
     rowPatch.custom_orders_enabled = patch.customOrdersEnabled;
   if (patch.servicesEnabled !== undefined)
     rowPatch.services_enabled = patch.servicesEnabled;
+  if (patch.themeId !== undefined)
+    rowPatch.theme_id = patch.themeId;
+  if (patch.themeOverrides !== undefined)
+    rowPatch.theme_overrides = patch.themeOverrides;
   if (patch.returnsPolicy !== undefined) {
     rowPatch.returns_enabled = patch.returnsPolicy?.enabled ?? false;
     rowPatch.returns_window_days = patch.returnsPolicy?.windowDays ?? 7;

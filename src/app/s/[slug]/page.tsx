@@ -15,6 +15,8 @@ import { EmptyStorefront } from "@/components/storefront/empty-state";
 import { StorefrontFooter } from "@/components/storefront/footer";
 import { CartSheet } from "@/components/storefront/cart-sheet";
 import { ProductDetailSheet } from "@/components/storefront/product-detail-sheet";
+import { ThemeProvider } from "@/components/storefront/theme-provider";
+import { THEMES, DEFAULT_THEME, isThemeId } from "@/lib/themes";
 import type { Product } from "@/types/storefront";
 import type { SellerStore } from "@/types/seller";
 import { buildInstagramUrl } from "@/lib/utils";
@@ -101,49 +103,74 @@ export default async function StorefrontPage({
       </div>
     );
   }
+  // Resolve the active theme + overrides for this store.
+  const themeId = isThemeId(store.themeId) ? store.themeId : DEFAULT_THEME;
+  const theme = THEMES[themeId];
+
   return (
-    <div className="flex min-h-screen flex-col">
-      <StorefrontHeader store={store} />
-      <main className="flex-1">
-        <Hero
-          kicker={store.heroKicker}
-          headline={store.heroHeadline}
-          sub={store.heroSub}
-          imageUrl={store.heroImage}
-          imageAlt={store.name}
-        />
-        {store.customOrdersEnabled && (
-          <div className="container-editorial">
-            <Link
-              href={`/s/${store.slug}/custom`}
-              className="mt-8 mb-2 flex items-center justify-between gap-3 rounded-2xl border border-vermillion/15 bg-vermillion/[0.04] px-5 py-4 transition-colors hover:bg-vermillion/[0.08]"
-            >
-              <div className="flex items-center gap-3">
-                <Sparkles className="h-4 w-4 text-vermillion" />
-                <div>
-                  <p className="text-[13.5px] font-semibold text-ink">
-                    Custom orders open
-                  </p>
-                  <p className="text-[11.5px] text-ink/55">
-                    Need something special? Place a custom request.
-                  </p>
+    <ThemeProvider
+      themeId={themeId}
+      overrides={store.themeOverrides ?? null}
+    >
+      <div className="flex min-h-screen flex-col">
+        <StorefrontHeader store={store} />
+        <main className="flex-1">
+          <Hero
+            kicker={store.heroKicker}
+            headline={store.heroHeadline}
+            sub={store.heroSub}
+            imageUrl={store.heroImage}
+            imageAlt={store.name}
+            variant={theme.heroVariant}
+            imageSide={theme.heroImageSide}
+          />
+          {store.customOrdersEnabled && (
+            <div className="container-editorial">
+              <Link
+                href={`/s/${store.slug}/custom`}
+                className="mt-8 mb-2 flex items-center justify-between gap-3 rounded-2xl border px-5 py-4 transition-colors"
+                style={{
+                  borderColor: "var(--theme-primary)",
+                  backgroundColor: "var(--theme-accent-bg)",
+                  color: "var(--theme-ink)",
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <Sparkles style={{ color: "var(--theme-primary)" }} className="h-4 w-4" />
+                  <div>
+                    <p
+                      className="text-[13.5px] font-semibold"
+                      style={{ color: "var(--theme-ink)" }}
+                    >
+                      Custom orders open
+                    </p>
+                    <p
+                      className="text-[11.5px]"
+                      style={{ color: "var(--theme-muted)" }}
+                    >
+                      Need something special? Place a custom request.
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <ArrowRight className="h-4 w-4 text-vermillion" />
-            </Link>
-          </div>
-        )}
-        {products.length === 0 ? (
-          <EmptyStorefront store={store} />
-        ) : (
-          <Suspense>
-            <ProductGrid products={products} />
-          </Suspense>
-        )}
-      </main>
-      <StorefrontFooter store={store} stats={stats} />
-      <CartSheet products={products} storeSlug={store.slug} />
-      <ProductDetailSheet products={products} serviceSlots={serviceSlots} />
-    </div>
+                <ArrowRight style={{ color: "var(--theme-primary)" }} className="h-4 w-4" />
+              </Link>
+            </div>
+          )}
+          {products.length === 0 ? (
+            <EmptyStorefront store={store} />
+          ) : (
+            <Suspense>
+              <ProductGrid products={products} density={theme.cardDensity} />
+            </Suspense>
+          )}
+        </main>
+        <StorefrontFooter store={store} stats={stats} />
+        <CartSheet products={products} storeSlug={store.slug} />
+        <ProductDetailSheet
+          products={products}
+          serviceSlots={serviceSlots}
+        />
+      </div>
+    </ThemeProvider>
   );
 }
