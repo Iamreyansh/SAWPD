@@ -10,6 +10,9 @@ import {
   Mail,
   ShoppingBag,
   Trash2,
+  KeyRound,
+  Gift,
+  Infinity as InfinityIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +24,8 @@ import {
   adminForceLowStockAction,
   emailApplicantAction,
   deleteStoreAction,
+  setStoreAccessAction,
+  purgeInactiveStoreAction,
 } from "@/app/admin/actions";
 
 type Plan = "weekly" | "monthly" | "none";
@@ -31,11 +36,34 @@ function planLabel(p: Plan | undefined | null): string {
   return "No plan";
 }
 
+function addDaysISO(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function addMonthsISO(months: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 export function StoreControls({
   storeSlug,
   initialPaused,
   initialPausedReason,
   currentPlan,
+  currentTrialEndsAt,
+  isInactive,
   applicationId,
   applicantEmail,
 }: {
@@ -43,6 +71,8 @@ export function StoreControls({
   initialPaused: boolean;
   initialPausedReason: string | undefined;
   currentPlan: Plan;
+  currentTrialEndsAt?: string | null;
+  isInactive: boolean;
   applicationId?: string;
   applicantEmail?: string;
 }) {
@@ -62,9 +92,23 @@ export function StoreControls({
   const [emailErrors, setEmailErrors] = useState<Record<string, string>>({});
   const [emailSent, setEmailSent] = useState(false);
 
-  // Delete state
+  // Delete state (legacy)
   const [showDelete, setShowDelete] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
+
+  // Subscription override state
+  const [showOverride, setShowOverride] = useState(false);
+  const [overridePlan, setOverridePlan] = useState<Plan>(currentPlan);
+  const [overrideExpiry, setOverrideExpiry] = useState<string>(
+    addMonthsISO(3),
+  );
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overrideNote, setOverrideNote] = useState("");
+
+  // Purge state (inactive only)
+  const [showPurge, setShowPurge] = useState(false);
+  const [purgeConfirm, setPurgeConfirm] = useState("");
+  const [purgeReason, setPurgeReason] = useState("");
 
   function flashError(msg: string) {
     setError(msg);
@@ -172,6 +216,57 @@ export function StoreControls({
         router.push("/admin/stores");
         return;
       }
+    });
+  }
+  function onApplyOverride() {
+    setError(null);
+    setSuccess(null);
+    if (overrideReason.trim().length < 3) {
+      flashError("Add a reason (for audit).");
+      return;
+    }
+    startTransition(async () => {
+      const res = await setStoreAccessAction({
+        storeSlug,
+        plan: overridePlan,
+        expiresAt: overridePlan === "none" ? overrideExpiry : "",
+        reason: overrideReason.trim(),
+        note: overrideNote.trim() || undefined,
+      });
+      if (!res.ok) {
+        flashError(res.error);
+        return;
+      }
+      flashSuccess(
+        res.trialEndsAt
+          ? `Access set until ${formatDate(res.trialEndsAt)}.`
+          : "Access set with no expiry.",
+      );
+      setPlan(overridePlan);
+      setShowOverride(false);
+      setOverrideReason("");
+      setOverrideNote("");
+      router.refresh();
+    });
+  }
+  function onPurge() {
+    setError(null);
+    setSuccess(null);
+    if (purgeReason.trim().length < 3) {
+      flashError("Add a reason (for audit).");
+      return;
+    }
+    startTransition(async () => {
+      const res = await purgeInactiveStoreAction({
+        storeSlug,
+        confirm: purgeConfirm,
+        reason: purgeReason.trim(),
+      });
+      if (!res.ok) {
+        flashError(res.error);
+        return;
+      }
+      router.push("/admin/stores");
     });
   }
 
@@ -414,33 +509,124 @@ export function StoreControls({
         )}
       </section>
 
-      <section className="rounded-2xl border border-vermillion/20 bg-vermillion/[0.03] p-5">
-        <p className="eyebrow-ink mb-3">Danger zone</p>
-        {showDelete ? (
+      {/* ── Subscription override (giveaway / extension) ─────────── */}
+      <section className="rounded-2xl border border-ink/10 bg-bone p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <KeyRound className="h-3.5 w-3.5 text-ink/55" />
+          <p className="eyebrow-ink">Subscription override</p>
+        </div>
+        <p className="mb-3 text-[12.5px] text-ink/55">
+          For giveaways, trials, or comp accounts. Stamps the plan + an
+          access-expiry date (or no expiry for permanent). Logged to the
+          audit trail; the seller is emailed.
+        </p>
+        <p className="mb-3 text-[12px] text-ink/50">
+          Current: <span className="text-ink">{planLabel(plan)}</span>
+          {currentTrialEndsAt !== undefined && (
+            <>
+              {" · access until "}
+              <span className="text-ink">
+                {currentTrialEndsAt ? formatDate(currentTrialEndsAt) : "no expiry"}
+              </span>
+            </>
+          )}
+        </p>
+
+        {showOverride ? (
           <div className="space-y-3">
-            <p className="text-[13px] text-ink/70">
-              This will permanently delete the store, all products, orders,
-              promos, and billing records. This cannot be undone.
-            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-[10.5px] font-semibold uppercase tracking-[0.18em] text-ink/55 mb-1.5">
+                  Plan
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {(["none", "weekly", "monthly"] as const).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setOverridePlan(p)}
+                      disabled={pending}
+                      className={
+                        "rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors " +
+                        (overridePlan === p
+                          ? "border-vermillion bg-vermillion text-bone"
+                          : "border-ink/15 bg-white text-ink hover:border-ink/40")
+                      }
+                    >
+                      {planLabel(p)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10.5px] font-semibold uppercase tracking-[0.18em] text-ink/55 mb-1.5">
+                  {overridePlan === "none" ? "Access expires" : "Renewal date"}
+                </label>
+                {overridePlan === "none" ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={overrideExpiry}
+                      onChange={(e) => setOverrideExpiry(e.target.value)}
+                      className="h-9 rounded-lg border border-ink/15 bg-white px-2.5 text-[13px] outline-none focus:border-ink/40"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setOverrideExpiry("")}
+                      disabled={pending}
+                      title="Clear — no expiry (permanent)"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ink/15 text-ink/55 hover:text-ink hover:border-ink/30"
+                    >
+                      <InfinityIcon className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <p className="rounded-lg border border-ink/10 bg-white px-3 py-2 text-[12.5px] text-ink/55">
+                    Auto-set to 30 days from today (matches monthly cadence).
+                  </p>
+                )}
+                {overridePlan === "none" && (
+                  <p className="mt-1 text-[11px] text-ink/45">
+                    Leave the date blank and tap ∞ for a permanent
+                    giveaway.
+                  </p>
+                )}
+              </div>
+            </div>
+
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/60">
-                Type <span className="font-mono text-vermillion">DELETE</span> to confirm
+              <label className="block text-[10.5px] font-semibold uppercase tracking-[0.18em] text-ink/55 mb-1.5">
+                Reason (audit)
               </label>
               <Input
-                value={deleteConfirm}
-                onChange={(e) => setDeleteConfirm(e.target.value)}
-                placeholder="DELETE"
-                className="mt-1 font-mono"
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                placeholder='e.g. "Q4 launch giveaway", "Partnership pilot"'
+                maxLength={280}
               />
             </div>
-            <div className="flex gap-2">
+            <div>
+              <label className="block text-[10.5px] font-semibold uppercase tracking-[0.18em] text-ink/55 mb-1.5">
+                Note to seller (optional)
+              </label>
+              <Textarea
+                value={overrideNote}
+                onChange={(e) => setOverrideNote(e.target.value)}
+                placeholder="Visible in the email we send to the seller."
+                rows={2}
+                maxLength={500}
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setShowDelete(false);
-                  setDeleteConfirm("");
+                  setShowOverride(false);
+                  setOverrideReason("");
+                  setOverrideNote("");
                 }}
                 disabled={pending}
               >
@@ -450,8 +636,99 @@ export function StoreControls({
                 type="button"
                 variant="vermillion"
                 size="sm"
-                onClick={onDelete}
-                disabled={pending || deleteConfirm !== "DELETE"}
+                onClick={onApplyOverride}
+                disabled={pending}
+              >
+                {pending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Gift className="h-4 w-4" />
+                )}
+                Apply override
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowOverride(true)}
+            disabled={pending}
+          >
+            <KeyRound className="h-4 w-4" />
+            Override access
+          </Button>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-vermillion/20 bg-vermillion/[0.03] p-5">
+        <p className="eyebrow-ink mb-3">Danger zone</p>
+
+        {!isInactive ? (
+          <div className="rounded-xl border border-ink/10 bg-bone p-3">
+            <p className="text-[12.5px] text-ink/60">
+              This store is currently <strong className="text-ink">active</strong>.
+              Permanent delete is only available on inactive stores — pause
+              it from the <em>Store state</em> panel above first. Once the
+              trial lapses or you suspend the shop, the purge option unlocks.
+            </p>
+          </div>
+        ) : showPurge ? (
+          <div className="space-y-3">
+            <p className="text-[13px] text-ink/70">
+              Purges the store and every related row (products, orders,
+              promos, billing, returns, service slots, custom orders,
+              templates, images). Logged to the audit trail. This cannot
+              be undone.
+            </p>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/60">
+                Type <span className="font-mono text-vermillion">PURGE</span> to confirm
+              </label>
+              <Input
+                value={purgeConfirm}
+                onChange={(e) => setPurgeConfirm(e.target.value)}
+                placeholder="PURGE"
+                className="mt-1 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/60">
+                Reason (audit)
+              </label>
+              <Input
+                value={purgeReason}
+                onChange={(e) => setPurgeReason(e.target.value)}
+                placeholder='e.g. "Inactive 90+ days", "Duplicate of /s/riya"'
+                maxLength={280}
+                className="mt-1"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowPurge(false);
+                  setPurgeConfirm("");
+                  setPurgeReason("");
+                }}
+                disabled={pending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="vermillion"
+                size="sm"
+                onClick={onPurge}
+                disabled={
+                  pending ||
+                  purgeConfirm !== "PURGE" ||
+                  purgeReason.trim().length < 3
+                }
               >
                 {pending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -465,18 +742,18 @@ export function StoreControls({
         ) : (
           <div className="flex items-center gap-3">
             <p className="text-[13px] text-ink/55">
-              Permanently remove this store and all its data.
+              Store is inactive. Remove it and all its data permanently.
             </p>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setShowDelete(true)}
+              onClick={() => setShowPurge(true)}
               disabled={pending}
               className="flex-shrink-0 border-vermillion/30 text-vermillion hover:bg-vermillion/5"
             >
               <Trash2 className="h-4 w-4" strokeWidth={2.25} />
-              Delete store
+              Permanently delete
             </Button>
           </div>
         )}

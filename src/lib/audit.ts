@@ -11,6 +11,15 @@ export type AuditEvent =
   | { kind: "store_suspended"; storeSlug: string; storeName: string; reason?: string }
   | { kind: "store_reactivated"; storeSlug: string; storeName: string }
   | { kind: "store_deleted"; storeSlug: string; storeName: string }
+  | { kind: "store_purged"; storeSlug: string; storeName: string; reason: string }
+  | {
+      kind: "store_access_overridden";
+      storeSlug: string;
+      storeName: string;
+      plan: "weekly" | "monthly" | "none";
+      trialEndsAt: string | null;
+      reason: string;
+    }
   | { kind: "store_plan_changed"; storeSlug: string; storeName: string; fromPlan: string | null; toPlan: "weekly" | "monthly" | "none" }
   | { kind: "return_requested"; storeSlug: string; returnId: string; orderId: string; productTitle: string; qty: number }
   | { kind: "return_decided"; storeSlug: string; returnId: string; orderId: string; decision: "approved" | "rejected" | "refunded" };
@@ -72,6 +81,14 @@ export function describeAuditEvent(entry: AuditEntry): string {
       return `Reactivated ${e.storeName}`;
     case "store_deleted":
       return `Deleted store · ${e.storeName}`;
+    case "store_purged":
+      return `Purged store · ${e.storeName} · ${e.reason}`;
+    case "store_access_overridden": {
+      const when = e.trialEndsAt
+        ? `until ${new Date(e.trialEndsAt).toLocaleDateString("en-IN")}`
+        : "no expiry";
+      return `Override ${e.plan} · ${e.storeName} · ${when} · ${e.reason}`;
+    }
     case "store_plan_changed":
       return `Plan changed · ${e.storeName} · ${e.fromPlan ?? "none"} → ${e.toPlan}`;
     case "return_requested":

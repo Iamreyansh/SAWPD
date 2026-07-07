@@ -325,6 +325,199 @@ export async function adminForceLowStockAction(storeSlug: string): Promise<Force
   return { ok: true, count: flagged.length };
 }
 
+// ---------- Manual subscription override (giveaway / extension) ----------
+
+const accessOverrideSchema = z.object({
+  storeSlug: z.string().min(1),
+  plan: z.enum(["weekly", "monthly", "none"]),
+  /**
+   * YYYY-MM-DD. Omit (or empty string) to clear the expiry — a permanent
+   * giveaway or an extension that never lapses. Ignored when
+   * `plan !== "none"`.
+   */
+  expiresAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .or(z.literal("")),
+  reason: z.string().min(3, "Reason is required (for audit).").max(280),
+  /** Optional internal note to the seller (separate from audit). */
+  note: z.string().max(500).optional(),
+});
+
+export type AccessOverrideResult =
+  | { ok: true; trialEndsAt: string | null }
+  | { ok: false; error: string };
+
+export async function setStoreAccessAction(
+  input: unknown
+): Promise<AccessOverrideResult> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: "Unauthorized." };
+  }
+  const parsed = accessOverrideSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
+  }
+  const store = await getStore(parsed.data.storeSlug);
+  if (!store) return { ok: false, error: "Store not found." };
+
+  // Plan: "none" → store's access is governed by the trial window.
+  //   - If an expiresAt was given, stamp it (end-of-day IST).
+  //   - Otherwise leave it null (permanent).
+  // Plan: "weekly" / "monthly" → access is governed by the plan; set
+  //   a renewal-style date so the dashboard reads correctly.
+  let trialEndsAt: string | null = null;
+  if (parsed.data.plan === "none") {
+    if (parsed.data.expiresAt && parsed.data.expiresAt.length > 0) {
+      const [y, m, d] = parsed.data.expiresAt.split("-").map(Number);
+      const dt = new Date(y, (m ?? 1) - 1, d ?? 1, 23, 59, 59, 0);
+      trialEndsAt = dt.toISOString();
+    }
+  } else {
+    const dt = new Date();
+    dt.setDate(dt.getDate() + 30);
+    dt.setHours(23, 59, 59, 0);
+    trialEndsAt = dt.toISOString();
+  }
+
+  const updated = await updateStore(store.slug, {
+    plan: parsed.data.plan === "none" ? undefined : parsed.data.plan,
+    trialEndsAt: trialEndsAt ?? undefined,
+  });
+  if (!updated) {
+    return { ok: false, error: "Could not update store." };
+  }
+  const finalTrialEndsAt = updated.trialEndsAt ?? null;
+
+  await appendAudit({
+    kind: "store_access_overridden",
+    storeSlug: store.slug,
+    storeName: store.name,
+    plan: parsed.data.plan,
+    trialEndsAt: finalTrialEndsAt,
+    reason: parsed.data.reason,
+  });
+
+  // Notify the seller if they have an email on file. Best-effort.
+  if (store.notifyEmail) {
+    try {
+      const when = finalTrialEndsAt
+        ? `until ${new Date(finalTrialEndsAt).toLocaleDateString("en-IN")}`
+        : "with no expiry";
+      const subject =
+        parsed.data.plan === "none"
+          ? "Your SAWPD shop access has been updated"
+          : `Your SAWPD subscription was set to ${parsed.data.plan}`;
+      const body =
+        `Hi ${store.name} team,\n\n` +
+        `An admin has updated your subscription:\n\n` +
+        `  Plan: ${parsed.data.plan === "none" ? "No plan" : parsed.data.plan}\n` +
+        `  Access: ${when}\n` +
+        `  Reason: ${parsed.data.reason}\n\n` +
+        (parsed.data.note ? `Note: ${parsed.data.note}\n\n` : "") +
+        `— SAWPD admin`;
+      await notifyStoreEmail({
+        to: store.notifyEmail,
+        subject,
+        body,
+      });
+    } catch (err) {
+      console.error("[admin] seller notification failed:", err);
+    }
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/stores");
+  revalidatePath(`/admin/stores/${store.slug}`);
+  revalidatePath(`/s/${store.slug}`);
+  return { ok: true, trialEndsAt: finalTrialEndsAt };
+}
+
+// ---------- Permanent purge (inactive stores only) --------------------
+
+const purgeSchema = z.object({
+  storeSlug: z.string().min(1),
+  confirm: z.literal("PURGE"),
+  reason: z.string().min(3).max(280),
+});
+
+export type PurgeStoreResult = { ok: true } | { ok: false; error: string };
+
+export async function purgeInactiveStoreAction(
+  input: unknown
+): Promise<PurgeStoreResult> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: "Unauthorized." };
+  }
+  const parsed = purgeSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
+  }
+  const store = await getStore(parsed.data.storeSlug);
+  if (!store) return { ok: false, error: "Store not found." };
+
+  // Safety guard: only allow purging inactive stores. An active
+  // store may have customers mid-checkout — force the admin to
+  // suspend first.
+  const { isStoreOpen } = await import("@/lib/trial");
+  if (isStoreOpen(store)) {
+    return {
+      ok: false,
+      error:
+        "Store is currently active. Suspend it first (Store state panel above) before purging.",
+    };
+  }
+
+  const sb = createAdminClient();
+
+  // Best-effort: remove uploaded product images from Supabase Storage.
+  const products = await listProductsForStore(store.slug);
+  for (const p of products) {
+    for (const img of p.images) {
+      await deleteUploadIfLocal(img.url);
+    }
+  }
+
+  // Explicit deletes for each child table. Our schema has
+  // ON DELETE CASCADE on most, but doing it explicitly gives a cleaner
+  // log and works even if a future migration drops a cascade.
+  await sb.from("products").delete().eq("store_slug", store.slug);
+  await sb.from("orders").delete().eq("store_slug", store.slug);
+  await sb.from("promos").delete().eq("store_slug", store.slug);
+  await sb.from("billing").delete().eq("store_slug", store.slug);
+  await sb.from("returns").delete().eq("store_slug", store.slug);
+  // Phase 3 tables
+  await sb.from("service_slots").delete().eq("store_slug", store.slug);
+  // service_bookings has order_id FK; orders are gone first.
+  // Custom-orders tables
+  await sb.from("custom_orders").delete().eq("store_slug", store.slug);
+  await sb.from("custom_templates").delete().eq("store_slug", store.slug);
+
+  const { error: delErr } = await sb
+    .from("stores")
+    .delete()
+    .eq("slug", store.slug);
+  if (delErr) return { ok: false, error: delErr.message };
+
+  await appendAudit({
+    kind: "store_purged",
+    storeSlug: store.slug,
+    storeName: store.name,
+    reason: parsed.data.reason,
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/stores");
+  return { ok: true };
+}
+
 // ---------- Hard delete ----------
 
 const deleteStoreSchema = z.object({

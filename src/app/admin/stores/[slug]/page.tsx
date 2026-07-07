@@ -194,6 +194,8 @@ export default async function AdminStoreDetailPage({
             initialPaused={!!store.paused}
             initialPausedReason={store.pausedReason}
             currentPlan={store.plan ?? "none"}
+            currentTrialEndsAt={store.trialEndsAt ?? null}
+            isInactive={!trial.active}
             applicationId={matchedApp?.id}
             applicantEmail={matchedApp?.email}
           />
