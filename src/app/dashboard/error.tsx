@@ -12,7 +12,10 @@ export default function DashboardError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error(error);
+    // Surface the real error so we can see it in the browser console —
+    // the digest is the only thing shown on screen for privacy.
+    // eslint-disable-next-line no-console
+    console.error("[dashboard error]", error);
   }, [error]);
 
   return (
@@ -28,6 +31,11 @@ export default function DashboardError({
         <p className="mt-3 font-mono text-[12px] text-ink/40">
           ref: {error.digest}
         </p>
+      )}
+      {error.message && process.env.NODE_ENV !== "production" && (
+        <pre className="mt-3 max-w-2xl overflow-x-auto rounded-lg border border-vermillion/20 bg-vermillion/[0.04] p-3 text-[11px] text-vermillion">
+          {error.message}
+        </pre>
       )}
       <div className="mt-8 flex flex-wrap gap-3">
         <Button onClick={reset} size="default" variant="default">

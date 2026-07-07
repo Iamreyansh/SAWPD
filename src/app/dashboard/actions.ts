@@ -1187,36 +1187,49 @@ export async function updateStoreThemeAction(
   themeId: string,
   overrides: unknown
 ): Promise<UpdateStoreThemeResult> {
-  const store = await requireActiveStore();
-  if (store.slug !== storeSlug) {
-    return { ok: false, error: "Store not found." };
-  }
-  if (!isThemeId(themeId)) {
-    return { ok: false, error: "Unknown theme." };
-  }
+  try {
+    const store = await requireActiveStore();
+    if (store.slug !== storeSlug) {
+      return { ok: false, error: "Store not found." };
+    }
+    if (!isThemeId(themeId)) {
+      return { ok: false, error: "Unknown theme." };
+    }
 
-  const parsed = themeOverridesSchema.safeParse(overrides ?? {});
-  if (!parsed.success) {
+    const parsed = themeOverridesSchema.safeParse(overrides ?? {});
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid overrides.",
+      };
+    }
+
+    const clean: ThemeOverrides = {};
+    if (parsed.data.primary && parsed.data.primary.length > 0) {
+      clean.primary = parsed.data.primary;
+    }
+    if (parsed.data.fontFamily && parsed.data.fontFamily.length > 0) {
+      clean.fontFamily = parsed.data.fontFamily;
+    }
+
+    await updateStore(
+      storeSlug,
+      { themeId, themeOverrides: clean },
+      { asSellerId: store.sellerId },
+    );
+    revalidatePath("/dashboard/settings");
+    revalidatePath(`/s/${storeSlug}`);
+    return { ok: true };
+  } catch (err) {
+    // Never let a tracking failure surface as a 500 — log it and return
+    // a friendly error so the dashboard's error boundary doesn't trip.
+    console.error("[updateStoreThemeAction] failed:", err);
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid overrides.",
+      error:
+        err instanceof Error
+          ? err.message
+          : "Couldn't save your theme. Please try again.",
     };
   }
-
-  const clean: ThemeOverrides = {};
-  if (parsed.data.primary && parsed.data.primary.length > 0) {
-    clean.primary = parsed.data.primary;
-  }
-  if (parsed.data.fontFamily && parsed.data.fontFamily.length > 0) {
-    clean.fontFamily = parsed.data.fontFamily;
-  }
-
-  await updateStore(
-    storeSlug,
-    { themeId, themeOverrides: clean },
-    { asSellerId: store.sellerId },
-  );
-  revalidatePath("/dashboard/settings");
-  revalidatePath(`/s/${storeSlug}`);
-  return { ok: true };
 }
