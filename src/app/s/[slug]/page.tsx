@@ -44,10 +44,13 @@ export async function generateMetadata({
 
 export default async function StorefrontPage({
   params,
+  searchParams,
 }: {
   params: Promise<Params>;
+  searchParams: Promise<{ theme?: string }>;
 }) {
   const { slug } = await params;
+  const { theme: previewTheme } = await searchParams;
   const store = (await getStore(slug)) as SellerStore | null;
   if (!store) notFound();
 
@@ -104,14 +107,36 @@ export default async function StorefrontPage({
     );
   }
   // Resolve the active theme + overrides for this store.
-  const themeId = isThemeId(store.themeId) ? store.themeId : DEFAULT_THEME;
-  const theme = THEMES[themeId];
+// If the URL has `?theme=<id>`, use that for the live preview — this
+// lets the seller preview a theme on the real storefront without
+// saving it first. (Validation is strict; unknown ids fall through
+// to the saved theme.)
+const previewId = isThemeId(previewTheme) ? previewTheme : null;
+const themeId = previewId ?? (isThemeId(store.themeId) ? store.themeId : DEFAULT_THEME);
+const theme = THEMES[themeId];
 
   return (
     <ThemeProvider
       themeId={themeId}
       overrides={store.themeOverrides ?? null}
     >
+      {previewId && (
+        <div className="bg-ink text-bone">
+          <div className="container-editorial flex flex-wrap items-center justify-between gap-3 py-2 text-[12px]">
+            <span>
+              Previewing{" "}
+              <strong>{THEMES[previewId].name}</strong> — this is a
+              live preview, not your saved theme.
+            </span>
+            <Link
+              href={`/s/${store.slug}`}
+              className="inline-flex items-center gap-1.5 rounded-full border border-bone/30 bg-bone/10 px-3 py-1 text-[11.5px] font-semibold text-bone transition-colors hover:bg-bone/20"
+            >
+              Exit preview
+            </Link>
+          </div>
+        </div>
+      )}
       <div className="flex min-h-screen flex-col">
         <StorefrontHeader store={store} />
         <main className="flex-1">

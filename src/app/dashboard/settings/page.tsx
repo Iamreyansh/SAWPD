@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireActiveStore } from "@/lib/seller-auth";
 import { getTrialState } from "@/lib/trial";
+import { listProductsForStore } from "@/lib/products";
 import { SettingsForm } from "@/components/dashboard/settings-form";
 import { PlanPicker } from "@/components/dashboard/plan-picker";
 import { ReturnsPolicyForm } from "@/components/dashboard/returns-policy-form";
@@ -45,6 +46,14 @@ export default async function SettingsPage() {
   }
 
   const trial = getTrialState(store);
+
+  // Fetch up to 3 sample products for the theme preview.
+  const products = await listProductsForStore(store.slug);
+  const sampleProducts = products.slice(0, 3).map((p) => ({
+    title: p.title,
+    price: p.price,
+    imageUrl: p.images[0]?.url ?? "",
+  }));
 
   return (
     <div className="mx-auto max-w-3xl space-y-10">
@@ -97,6 +106,15 @@ export default async function SettingsPage() {
             isThemeId(store.themeId) ? store.themeId : DEFAULT_THEME
           }
           currentOverrides={store.themeOverrides ?? null}
+          store={{
+            name: store.name,
+            ownerHandle: store.ownerHandle,
+            heroKicker: store.heroKicker,
+            heroHeadline: store.heroHeadline,
+            heroSub: store.heroSub,
+            heroImage: store.heroImage,
+          }}
+          sampleProducts={sampleProducts}
         />
       </div>
 
