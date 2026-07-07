@@ -21,6 +21,7 @@ import { loginProtection } from "@/lib/brute-force";
 import { getClientIp } from "@/lib/get-ip";
 import { deleteUploadIfLocal } from "@/lib/uploads";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createSellerSession } from "@/lib/seller-auth";
 import { LOW_STOCK_THRESHOLD } from "@/lib/utils";
 
 async function requireAdmin(): Promise<boolean> {
@@ -610,4 +611,48 @@ export async function deleteApplicationAction(
   revalidatePath("/admin");
   revalidatePath("/admin/applications");
   return { ok: true };
+}
+
+// ---------- Impersonate a seller (admin demo helper) ----------
+
+/**
+ * Mints a `sawpd_seller` session cookie for the store's owner, then
+ * redirects to `/dashboard`. The admin now sees the seller's view
+ * exactly as the seller would.
+ *
+ * Used by /admin/demo for quick live demos. The original admin
+ * session is preserved (separate cookie). To return to admin, the
+ * admin signs out from the seller dashboard and visits /admin again.
+ */
+export async function impersonateSellerAction(storeSlug: string): Promise<never> {
+  if (!(await requireAdmin())) {
+    throw new Error("Unauthorized.");
+  }
+  const store = await getStore(storeSlug);
+  if (!store) {
+    throw new Error("Store not found.");
+  }
+
+  await createSellerSession(store.sellerId);
+
+  // Append a custom audit row directly so the impersonation is
+  // recorded even though it doesn't match any of the typed event
+  // kinds. This is admin-only, server-side, and self-auditing.
+  try {
+    const sb = createAdminClient();
+    await sb.from("audit_log").insert({
+      id: `aud_${crypto.randomUUID().slice(0, 8)}`,
+      at: new Date().toISOString(),
+      event: {
+        kind: "admin_impersonated",
+        storeSlug: store.slug,
+        storeName: store.name,
+        sellerId: store.sellerId,
+      },
+    });
+  } catch (err) {
+    console.error("[admin] impersonation audit failed:", err);
+  }
+
+  redirect("/dashboard");
 }

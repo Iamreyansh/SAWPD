@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Inbox, Store, LogOut, ArrowUpRight } from "lucide-react";
+import {
+  LayoutDashboard,
+  Inbox,
+  Store,
+  LogOut,
+  ArrowUpRight,
+  Eye,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/app/admin/actions";
 import { Logo } from "@/components/ui/logo";
@@ -11,6 +18,7 @@ const navItems = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
   { href: "/admin/applications", label: "Applications", icon: Inbox },
   { href: "/admin/stores", label: "Stores", icon: Store },
+  { href: "/admin/demo", label: "Demo shops", icon: Eye },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
